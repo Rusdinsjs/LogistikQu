@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: logisticqu-dev-db
+    restart: unless-stopped
+    ports:
+      - '5440:5432'
+    environment:
+      POSTGRES_DB: logisticqu_dev
+      POSTGRES_USER: logisticqu
+      POSTGRES_PASSWORD: logisticqu_secret
+    volumes:
+      - logisticqu_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U logisticqu -d logisticqu_dev']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  logisticqu_dev_pgdata:

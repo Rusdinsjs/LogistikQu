@@ -1,0 +1,52 @@
+services:
+  logisticqu-db:
+    image: postgres:17-alpine
+    container_name: logisticqu-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: logisticqu_prod
+      POSTGRES_USER: logisticqu_user
+      POSTGRES_PASSWORD: logisticqu_super_secure_pass_2026
+    volumes:
+      - logisticqu_db_data:/var/lib/postgresql/data
+    networks:
+      - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logisticqu_user -d logisticqu_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  logisticqu-backend:
+    image: logisticqu-backend:latest
+    container_name: logisticqu-backend
+    restart: unless-stopped
+    depends_on:
+      logisticqu-db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://logisticqu_user:logisticqu_super_secure_pass_2026@logisticqu-db:5432/logisticqu_prod
+      JWT_SECRET: super-secret-jwt-key-vale-indonesia-logisticqu-2026
+      RUST_LOG: info
+    networks:
+      - logisticqu-net
+
+  logisticqu-web:
+    image: logisticqu-web:latest
+    container_name: logisticqu-web
+    restart: unless-stopped
+    depends_on:
+      - logisticqu-backend
+    ports:
+      - "8090:80"
+    networks:
+      - logisticqu-net
+
+volumes:
+  logisticqu_db_data:
+    name: logisticqu_db_data
+
+networks:
+  logisticqu-net:
+    name: logisticqu-net

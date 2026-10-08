@@ -1,0 +1,26 @@
+# Rust
+target/
+**/target/
+
+# Node / Frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.pnpm-store/
+
+# Environment & Secrets
+.env
+**/.env
+*.local
+
+# System & OS artifacts
+.DS_Store
+Thumbs.db
+*.Zone.Identifier
+*:Zone.Identifier
+
+# Backups & Dumps
+*.dump
+*.dump.gz
+*.log
