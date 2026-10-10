@@ -34,16 +34,18 @@
 
 ---
 
-## 👥 Akun Demo Pengujian (Password: `password123`)
+## 👥 Akun Pengguna Demo (Password: `password123`)
 
-| Username | Role | Cakupan Gudang |
-| :--- | :--- | :--- |
-| `admin_cont_he` | Admin Kontainer HE | `WH-CONT-HE` (Alat Berat) |
-| `admin_cont_dt` | Admin Kontainer DT | `WH-CONT-DT` (Dump Truck) |
-| `admin_main_he` | Admin Gudang Utama HE | `WH-MAIN-HE` (Gudang Utama Alat Berat) |
-| `admin_main_dt` | Admin Gudang Utama DT | `WH-MAIN-DT` (Gudang Utama Dump Truck) |
-| `supervisor` | Supervisor | Seluruh Gudang |
-| `superadmin` | Super Admin | Seluruh Gudang |
+| Username | Role | Cakupan Gudang | Keterangan & Tugas |
+| :--- | :--- | :--- | :--- |
+| `superadmin` | Super Admin | Seluruh Gudang | Akses teknis sistem, master data, konfigurasi |
+| `manager` | Manager Logistik | Seluruh Gudang | Akses eksekutif seluruh gudang & **Manajemen Pengguna** |
+| `supervisor_he` | Supervisor Alat Berat | `WH-MAIN-HE` & `WH-CONT-HE` | Khusus persetujuan divisi Alat Berat |
+| `supervisor_dt` | Supervisor Dump Truck | `WH-MAIN-DT` & `WH-CONT-DT` | Khusus persetujuan divisi Dump Truck |
+| `admin_main_he` | Admin Gudang Utama HE | `WH-MAIN-HE` | Verifikasi request & drop suplai ke kontainer HE |
+| `admin_main_dt` | Admin Gudang Utama DT | `WH-MAIN-DT` | Verifikasi request & drop suplai ke kontainer DT |
+| `admin_cont_he` | Admin Kontainer HE | `WH-CONT-HE` | POS pengeluaran part HE & pengajuan replenishment |
+| `admin_cont_dt` | Admin Kontainer DT | `WH-CONT-DT` | POS pengeluaran part DT & pengajuan replenishment |
 
 ---
 

@@ -37,12 +37,14 @@ Dokumen ini ditujukan sebagai **panduan transfer konteks** bagi asisten AI Antig
 ---
 
 ## 3. Akun Pengguna Demo (Password: `password123`)
-- `admin_cont_he` : Admin Kontainer Heavy Equipment (`WH-CONT-HE`)
-- `admin_cont_dt` : Admin Kontainer Dump Truck (`WH-CONT-DT`)
+- `superadmin`    : Super Admin Sistem (Akses seluruh gudang & konfigurasi)
+- `manager`       : Manager Logistik (Akses seluruh gudang & Manajemen Pengguna)
+- `supervisor_he` : Supervisor Gudang Utama Alat Berat (`WH-MAIN-HE` & `WH-CONT-HE`)
+- `supervisor_dt` : Supervisor Gudang Utama Dump Truck (`WH-MAIN-DT` & `WH-CONT-DT`)
 - `admin_main_he` : Admin Gudang Utama HE (`WH-MAIN-HE`)
 - `admin_main_dt` : Admin Gudang Utama DT (`WH-MAIN-DT`)
-- `supervisor`    : Supervisor Operasional Gudang
-- `superadmin`    : Super Admin Sistem
+- `admin_cont_he` : Admin Kontainer Heavy Equipment (`WH-CONT-HE`)
+- `admin_cont_dt` : Admin Kontainer Dump Truck (`WH-CONT-DT`)
 
 ---
 
