@@ -12,11 +12,13 @@ import {
   History,
   Users,
   RotateCcw,
+  Layers,
 } from 'lucide-react';
 
 export type TabId =
   | 'dashboard'
   | 'inventory'
+  | 'bins'
   | 'pos'
   | 'returns'
   | 'replenishment'
@@ -43,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
   const menuItems: Array<{ id: TabId; label: string; icon: React.FC<{ className?: string }> }> = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Monitoring Stok', icon: Boxes },
+    { id: 'bins', label: 'Layout & Denah Bin Rak', icon: Layers },
     { id: 'pos', label: 'POS Issue Spare Part', icon: ShoppingCart },
     { id: 'returns', label: 'Retur Part Bekas', icon: RotateCcw },
     { id: 'replenishment', label: 'Alur Permohonan Stok', icon: GitPullRequest },

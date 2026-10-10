@@ -15,34 +15,19 @@ import {
   AlertCircle,
   FileCheck,
   Trash2,
-  Table,
-  Layers,
-  Plus,
-  Edit2,
   MoveRight,
-  Boxes,
-  Info,
+  Layers,
+  Table,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
-  const { activeWarehouse, activeWarehouseInfo, user } = useAuth();
-  const canManageBins =
-    user?.role_id === 'SUPER_ADMIN' ||
-    user?.role_id === 'MANAGER' ||
-    user?.role_id?.startsWith('SUPERVISOR') ||
-    user?.role_id?.startsWith('CONTAINER_ADMIN') ||
-    user?.permissions?.includes('master.manage');
-
-  // Main View Switcher: 'stock' | 'bins'
-  const [viewMode, setViewMode] = useState<'stock' | 'bins'>('stock');
+  const { activeWarehouse, activeWarehouseInfo } = useAuth();
 
   const [stocks, setStocks] = useState<InventoryStockItem[]>([]);
   const [bins, setBins] = useState<WarehouseBinItem[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARNING' | 'CRITICAL'>('ALL');
-  const [zoneFilter, setZoneFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
-  const [binLoading, setBinLoading] = useState(false);
 
   // Stock Movement Modal
   const [selectedPart, setSelectedPart] = useState<InventoryStockItem | null>(null);
@@ -73,17 +58,6 @@ export const InventoryPage: React.FC = () => {
   const [relocateTargetBin, setRelocateTargetBin] = useState('');
   const [relocating, setRelocating] = useState(false);
 
-  // Add / Edit Bin Modal
-  const [showBinModal, setShowBinModal] = useState(false);
-  const [binModalMode, setBinModalMode] = useState<'create' | 'edit'>('create');
-  const [binModalId, setBinModalId] = useState('');
-  const [binFormCode, setBinFormCode] = useState('');
-  const [binFormZone, setBinFormZone] = useState('BAY-LEFT');
-  const [binFormLevel, setBinFormLevel] = useState('LEVEL-1');
-  const [binFormCapacity, setBinFormCapacity] = useState(10);
-  const [binFormDesc, setBinFormDesc] = useState('');
-  const [savingBin, setSavingBin] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchStock = async () => {
@@ -99,14 +73,11 @@ export const InventoryPage: React.FC = () => {
   };
 
   const fetchBins = async () => {
-    setBinLoading(true);
     try {
       const data = await binApi.getWarehouseBins(activeWarehouse);
       setBins(data);
     } catch (err) {
       console.error(err);
-    } finally {
-      setBinLoading(false);
     }
   };
 
@@ -354,93 +325,10 @@ export const InventoryPage: React.FC = () => {
     }
   };
 
-  // --- BIN CRUD HANDLERS ---
-  const openCreateBinModal = () => {
-    setBinModalMode('create');
-    setBinModalId('');
-    setBinFormCode('');
-    setBinFormZone('BAY-LEFT');
-    setBinFormLevel('LEVEL-1');
-    setBinFormCapacity(10);
-    setBinFormDesc('');
-    setShowBinModal(true);
-  };
-
-  const openEditBinModal = (b: WarehouseBinItem) => {
-    setBinModalMode('edit');
-    setBinModalId(b.id);
-    setBinFormCode(b.bin_code);
-    setBinFormZone(b.zone);
-    setBinFormLevel(b.shelf_level);
-    setBinFormCapacity(b.capacity_parts);
-    setBinFormDesc(b.description || '');
-    setShowBinModal(true);
-  };
-
-  const handleSaveBin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!binFormCode.trim()) {
-      alert('Kode Bin wajib diisi!');
-      return;
-    }
-
-    setSavingBin(true);
-    try {
-      if (binModalMode === 'create') {
-        const res = await binApi.createBin(activeWarehouse, {
-          bin_code: binFormCode.trim().toUpperCase(),
-          zone: binFormZone,
-          shelf_level: binFormLevel,
-          capacity_parts: Number(binFormCapacity) || 10,
-          description: binFormDesc.trim() || undefined,
-        });
-        alert(res.message);
-      } else {
-        const res = await binApi.updateBin(activeWarehouse, binModalId, {
-          bin_code: binFormCode.trim().toUpperCase(),
-          zone: binFormZone,
-          shelf_level: binFormLevel,
-          capacity_parts: Number(binFormCapacity) || 10,
-          description: binFormDesc.trim() || undefined,
-        });
-        alert(res.message);
-      }
-      setShowBinModal(false);
-      fetchBins();
-    } catch (err: any) {
-      alert(err?.response?.data?.error || 'Gagal menyimpan data bin');
-    } finally {
-      setSavingBin(false);
-    }
-  };
-
-  const handleDeleteBin = async (b: WarehouseBinItem) => {
-    if (!window.confirm(`Hapus atau nonaktifkan Bin "${b.bin_code}"?`)) return;
-
-    try {
-      const res = await binApi.deleteBin(activeWarehouse, b.id);
-      alert(res.message);
-      fetchBins();
-    } catch (err: any) {
-      alert(err?.response?.data?.error || 'Gagal menghapus bin');
-    }
-  };
-
   const filtered = stocks.filter((s) => {
     if (statusFilter === 'ALL') return true;
     return s.status === statusFilter;
   });
-
-  const filteredBins = bins.filter((b) => {
-    if (zoneFilter === 'ALL') return true;
-    return b.zone === zoneFilter;
-  });
-
-  // Calculate Bin Statistics
-  const totalBinsCount = bins.length;
-  const occupiedBinsCount = bins.filter((b) => (b.current_items_count ?? 0) > 0).length;
-  const totalPartsStored = bins.reduce((acc, b) => acc + (b.current_items_count ?? 0), 0);
-  const occupancyPercentage = totalBinsCount > 0 ? Math.round((occupiedBinsCount / totalBinsCount) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -448,7 +336,7 @@ export const InventoryPage: React.FC = () => {
       <div className="glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            Monitoring Persediaan & Tata Letak Bin Gudang Kontainer
+            Monitoring Saldo Persediaan Stok
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             Gudang: <span className="font-semibold text-cyan-300">{activeWarehouseInfo?.name}</span> ({activeWarehouse})
@@ -473,54 +361,15 @@ export const InventoryPage: React.FC = () => {
               fetchBins();
             }}
             className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
-            title="Refresh Stok & Denah Bin"
+            title="Refresh Stok"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Mode Switcher Tabs (Tabel Stok vs Denah & Bin Kontainer) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('stock')}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition ${
-              viewMode === 'stock'
-                ? 'bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Table className="w-4 h-4" />
-            <span>Tabel Saldo Persediaan ({stocks.length} Part)</span>
-          </button>
-          <button
-            onClick={() => setViewMode('bins')}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition ${
-              viewMode === 'bins'
-                ? 'bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Layout & Denah Bin Rak ({bins.length} Bin)</span>
-          </button>
-        </div>
-
-        {viewMode === 'bins' && canManageBins && (
-          <button
-            onClick={openCreateBinModal}
-            className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Tambah Bin / Rak Baru</span>
-          </button>
-        )}
-      </div>
-
-      {/* VIEW 1: MAIN STOCK TABLE */}
-      {viewMode === 'stock' && (
-        <div className="space-y-4">
+      {/* MAIN STOCK MONITORING */}
+      <div className="space-y-4">
           {/* Filter and Search Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:w-80">
@@ -662,215 +511,6 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* VIEW 2: CONTAINER BINS & RACKS LAYOUT */}
-      {viewMode === 'bins' && (
-        <div className="space-y-6">
-          {/* KPI Metrics Banner */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400">Total Bin / Rak</span>
-                <div className="text-xl font-bold font-mono text-white mt-0.5">{totalBinsCount} Bin</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-cyan-950/50 text-cyan-400 border border-cyan-800/40">
-                <Layers className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400">Bin Terisi</span>
-                <div className="text-xl font-bold font-mono text-emerald-400 mt-0.5">{occupiedBinsCount} Bin</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-emerald-950/50 text-emerald-400 border border-emerald-800/40">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400">Part Terpetakan</span>
-                <div className="text-xl font-bold font-mono text-cyan-300 mt-0.5">{totalPartsStored} Item</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-800 text-cyan-300 border border-slate-700">
-                <Boxes className="w-5 h-5" />
-              </div>
-            </div>
-
-            <div className="glass-card p-4 rounded-xl border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-400">Tingkat Okupansi</span>
-                <div className="text-xl font-bold font-mono text-amber-400 mt-0.5">{occupancyPercentage}%</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-amber-950/50 text-amber-400 border border-amber-800/40">
-                <Info className="w-5 h-5" />
-              </div>
-            </div>
-          </div>
-
-          {/* Zone Filter Pill Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs text-slate-500 shrink-0">Filter Zona Rak:</span>
-            {['ALL', 'BAY-LEFT', 'BAY-RIGHT', 'FLOOR-BAY', 'BAY-GENERAL'].map((z) => (
-              <button
-                key={z}
-                onClick={() => setZoneFilter(z)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all ${
-                  zoneFilter === z
-                    ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-                }`}
-              >
-                {z === 'ALL' && 'Semua Zona'}
-                {z === 'BAY-LEFT' && '⬅️ Bay Kiri'}
-                {z === 'BAY-RIGHT' && '➡️ Bay Kanan'}
-                {z === 'FLOOR-BAY' && '🛢️ Area Drum / Lantai'}
-                {z === 'BAY-GENERAL' && '📦 Rak Umum'}
-              </button>
-            ))}
-          </div>
-
-          {/* Visual Bin Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {binLoading ? (
-              <div className="col-span-full py-12 text-center text-slate-400 text-xs">
-                Memuat denah dan lokasi bin kontainer...
-              </div>
-            ) : filteredBins.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-slate-500 text-xs glass-card rounded-2xl border border-slate-800">
-                Belum ada bin yang terdaftar pada zona ini.
-              </div>
-            ) : (
-              filteredBins.map((b) => {
-                const parts = Array.isArray(b.parts) ? b.parts : [];
-                const isOccupied = parts.length > 0;
-                const capacity = b.capacity_parts || 10;
-                const percent = Math.min(100, Math.round((parts.length / capacity) * 100));
-
-                return (
-                  <div
-                    key={b.id}
-                    className="glass-card rounded-2xl p-5 border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between space-y-4"
-                  >
-                    <div>
-                      {/* Bin Header */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-sm text-cyan-300 bg-cyan-950/60 px-2.5 py-1 rounded border border-cyan-800/60">
-                              {b.bin_code}
-                            </span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                              {b.zone}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
-                            <span>Level: <b className="text-slate-200">{b.shelf_level}</b></span>
-                            <span>•</span>
-                            <span className="line-clamp-1">{b.description || 'Rak Kompartemen'}</span>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            isOccupied
-                              ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
-                              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          }`}
-                        >
-                          {isOccupied ? 'Terisi' : 'Kosong'}
-                        </span>
-                      </div>
-
-                      {/* Capacity Bar */}
-                      <div className="mt-3 space-y-1">
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>Kapasitas Bin</span>
-                          <span className="font-mono text-slate-200">
-                            {parts.length} / {capacity} Part ({percent}%)
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              percent >= 100
-                                ? 'bg-rose-500'
-                                : percent >= 75
-                                ? 'bg-amber-400'
-                                : 'bg-cyan-400'
-                            }`}
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Parts Stored List */}
-                      <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
-                        <div className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-                          <span>Part di Bin Ini:</span>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            Total: {Number(b.total_qty || 0)} Pcs
-                          </span>
-                        </div>
-
-                        {parts.length === 0 ? (
-                          <div className="text-[11px] text-slate-500 italic py-2">
-                            Bin ini masih kosong (siap dialokasikan).
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                            {parts.map((p: any, idx: number) => (
-                              <div
-                                key={idx}
-                                className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-[11px]"
-                              >
-                                <div>
-                                  <span className="font-mono font-bold text-cyan-300">{p.spare_part_id}</span>
-                                  <p className="text-[10px] text-slate-400 line-clamp-1">{p.part_name}</p>
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-mono font-bold text-white">
-                                    {p.qty_on_hand} <span className="text-[9px] font-normal text-slate-400">{p.unit_of_measure}</span>
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bin Actions */}
-                    {canManageBins && (
-                      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                        <button
-                          type="button"
-                          onClick={() => openEditBinModal(b)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition flex items-center gap-1 text-[11px]"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                          <span>Edit Bin</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBin(b)}
-                          className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition"
-                          title="Hapus / Nonaktifkan Bin"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
 
       {/* MODAL PINDAH LOKASI BIN (RELOCATE) */}
       {showRelocateModal && (
@@ -943,115 +583,6 @@ export const InventoryPage: React.FC = () => {
                   className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {relocating ? 'Memindahkan...' : 'Konfirmasi Pindah Bin'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL ADD / EDIT BIN */}
-      {showBinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="glass-panel w-full max-w-md rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2 text-cyan-400">
-                <Layers className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-white">
-                  {binModalMode === 'create' ? 'Tambah Bin / Rak Baru' : 'Edit Data Bin'}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBinModal(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveBin} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-400 mb-1">Kode Bin / Rak *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: RACK-HE-A4 atau BIN-B1-02"
-                  value={binFormCode}
-                  onChange={(e) => setBinFormCode(e.target.value.toUpperCase())}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono uppercase focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-400 mb-1">Zona Kontainer *</label>
-                  <select
-                    value={binFormZone}
-                    onChange={(e) => setBinFormZone(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  >
-                    <option value="BAY-LEFT">Bay Kiri (BAY-LEFT)</option>
-                    <option value="BAY-RIGHT">Bay Kanan (BAY-RIGHT)</option>
-                    <option value="FLOOR-BAY">Area Lantai / Drum</option>
-                    <option value="BAY-CENTER">Tengah (BAY-CENTER)</option>
-                    <option value="BAY-GENERAL">Umum (BAY-GENERAL)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 mb-1">Level Rak *</label>
-                  <select
-                    value={binFormLevel}
-                    onChange={(e) => setBinFormLevel(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
-                  >
-                    <option value="LEVEL-1">Level 1 (Bawah)</option>
-                    <option value="LEVEL-2">Level 2 (Tengah)</option>
-                    <option value="LEVEL-3">Level 3 (Atas)</option>
-                    <option value="LEVEL-4">Level 4 (Paling Atas)</option>
-                    <option value="FLOOR">Floor (Lantai)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Kapasitas Maksimal Jenis Part</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={binFormCapacity}
-                  onChange={(e) => setBinFormCapacity(Number(e.target.value) || 10)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:border-cyan-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Keterangan / Kategori Part yang Disimpan</label>
-                <textarea
-                  rows={2}
-                  placeholder="Misal: Khusus Fast Moving O-Ring & Seal Kit..."
-                  value={binFormDesc}
-                  onChange={(e) => setBinFormDesc(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowBinModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingBin}
-                  className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold disabled:opacity-50"
-                >
-                  {savingBin ? 'Menyimpan...' : binModalMode === 'create' ? 'Simpan Bin' : 'Perbarui Bin'}
                 </button>
               </div>
             </form>

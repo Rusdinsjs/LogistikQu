@@ -5,6 +5,7 @@ import { Sidebar, type TabId } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { WarehouseBinsPage } from './pages/WarehouseBinsPage';
 import { PosIssuePage } from './pages/PosIssuePage';
 import { ReplenishmentPage } from './pages/ReplenishmentPage';
 import { DropHistoryPage } from './pages/DropHistoryPage';
@@ -48,6 +49,7 @@ const AppContent: React.FC = () => {
           <div className="max-w-7xl mx-auto">
             {currentTab === 'dashboard' && <DashboardPage onNavigate={setCurrentTab} />}
             {currentTab === 'inventory' && <InventoryPage />}
+            {currentTab === 'bins' && <WarehouseBinsPage />}
             {currentTab === 'pos' && <PosIssuePage />}
             {currentTab === 'returns' && <UsedPartReturnsPage />}
             {currentTab === 'replenishment' && <ReplenishmentPage />}
