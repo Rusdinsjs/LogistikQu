@@ -28,9 +28,10 @@ impl AppConfig {
             .unwrap_or(7);
         let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let server_port = env::var("SERVER_PORT")
+            .or_else(|_| env::var("PORT"))
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(8080);
+            .unwrap_or(8090);
 
         Self {
             database_url,

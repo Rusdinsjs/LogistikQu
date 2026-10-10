@@ -434,9 +434,13 @@ export const MasterPage: React.FC = () => {
         alert(res.message || 'Kategori gudang berhasil diperbarui');
       }
       handleOpenCreateCategory();
-      loadCategories();
+      await loadCategories();
+      if (activeTab === 'warehouses') {
+        loadData();
+      }
     } catch (err: any) {
-      alert(err?.response?.data?.error || 'Gagal menyimpan kategori');
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Gagal menyimpan kategori';
+      alert(errMsg);
     } finally {
       setSavingCategory(false);
     }
@@ -1459,6 +1463,7 @@ export const MasterPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        loadCategories();
                         handleOpenCreateCategory();
                         setShowCategoryModal(true);
                       }}
