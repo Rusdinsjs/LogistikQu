@@ -109,10 +109,11 @@ pub async fn create_issue(
             receiver_employee_id, receiver_department, unit_number, unit_name,
             unit_type, ct_number, serial_number, hm_km, mechanic_name,
             mechanic_id, work_order_number, maintenance_type, priority,
-            status, notes, latitude, longitude, device_id, client_uuid, created_by
+            status, notes, latitude, longitude, device_id, client_uuid,
+            evidence_photo_url, document_url, created_by
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-            $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+            $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
         )
         RETURNING id
         "#,
@@ -139,6 +140,8 @@ pub async fn create_issue(
         payload.longitude,
         payload.device_id,
         payload.client_uuid,
+        payload.evidence_photo_url,
+        payload.document_url,
         user.sub
     )
     .fetch_one(&mut *tx)
@@ -159,6 +162,40 @@ pub async fn create_issue(
         )
         .execute(&mut *tx)
         .await?;
+
+        // Check if item requires core return
+        let requires_core_return = sqlx::query_scalar!(
+            "SELECT requires_core_return FROM spare_parts WHERE id = $1",
+            item.spare_part_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .unwrap_or(false);
+
+        if requires_core_return {
+            let return_no = next_document_number(&mut tx, "RET").await?;
+            sqlx::query!(
+                r#"
+                INSERT INTO used_part_returns (
+                    return_number, issue_transaction_id, spare_part_id, qty, unit_of_measure,
+                    unit_number, mechanic_name, mechanic_id, warehouse_id,
+                    status, current_holder_type, current_holder_name
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING_RETURN', 'MECHANIC', $10)
+                "#,
+                return_no,
+                issue_id,
+                item.spare_part_id,
+                item.qty,
+                item.unit_of_measure,
+                payload.unit_number,
+                payload.mechanic_name,
+                payload.mechanic_id,
+                payload.warehouse_id,
+                payload.mechanic_name
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
 
         if status == "COMPLETED" {
             // Lock and verify stock
@@ -274,7 +311,7 @@ pub async fn list_issues(
                receiver_employee_id, receiver_department, unit_number, unit_name,
                unit_type, ct_number, serial_number, hm_km, mechanic_name,
                mechanic_id, work_order_number, maintenance_type, priority,
-               status, notes, created_by, approved_by, created_at
+               status, notes, evidence_photo_url, document_url, created_by, approved_by, created_at
         FROM issue_transactions
         WHERE warehouse_id = $1
           AND ($2 = '' OR transaction_number ILIKE $3 OR unit_number ILIKE $3 OR mechanic_name ILIKE $3)
@@ -305,7 +342,7 @@ pub async fn get_issue_detail(
                receiver_employee_id, receiver_department, unit_number, unit_name,
                unit_type, ct_number, serial_number, hm_km, mechanic_name,
                mechanic_id, work_order_number, maintenance_type, priority,
-               status, notes, created_by, approved_by, created_at
+               status, notes, evidence_photo_url, document_url, created_by, approved_by, created_at
         FROM issue_transactions
         WHERE id = $1
         "#,
@@ -348,7 +385,7 @@ pub async fn approve_critical_issue(
 
     let issue = sqlx::query!(
         r#"
-        SELECT id, transaction_number, warehouse_id, unit_number, mechanic_name, status
+        SELECT id, transaction_number, warehouse_id, unit_number, mechanic_name, mechanic_id, status
         FROM issue_transactions
         WHERE id = $1
         FOR UPDATE
@@ -367,7 +404,7 @@ pub async fn approve_critical_issue(
 
     let items = sqlx::query!(
         r#"
-        SELECT spare_part_id, qty FROM issue_transaction_items
+        SELECT spare_part_id, qty, unit_of_measure FROM issue_transaction_items
         WHERE transaction_id = $1
         "#,
         id
@@ -376,7 +413,7 @@ pub async fn approve_critical_issue(
     .await?;
 
     // Deduct stocks
-    for itm in items {
+    for itm in &items {
         let current_qty = sqlx::query_scalar!(
             r#"
             SELECT qty_on_hand FROM inventory_stock
@@ -428,6 +465,51 @@ pub async fn approve_critical_issue(
         )
         .execute(&mut *tx)
         .await?;
+
+        // Check if item requires core return and create record if not exists
+        let requires_core_return = sqlx::query_scalar!(
+            "SELECT requires_core_return FROM spare_parts WHERE id = $1",
+            itm.spare_part_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .unwrap_or(false);
+
+        if requires_core_return {
+            let exists = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM used_part_returns WHERE issue_transaction_id = $1 AND spare_part_id = $2)",
+                id,
+                itm.spare_part_id
+            )
+            .fetch_one(&mut *tx)
+            .await?
+            .unwrap_or(false);
+
+            if !exists {
+                let return_no = next_document_number(&mut tx, "RET").await?;
+                sqlx::query!(
+                    r#"
+                    INSERT INTO used_part_returns (
+                        return_number, issue_transaction_id, spare_part_id, qty, unit_of_measure,
+                        unit_number, mechanic_name, mechanic_id, warehouse_id,
+                        status, current_holder_type, current_holder_name
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING_RETURN', 'MECHANIC', $10)
+                    "#,
+                    return_no,
+                    id,
+                    itm.spare_part_id,
+                    itm.qty,
+                    itm.unit_of_measure,
+                    issue.unit_number,
+                    issue.mechanic_name,
+                    issue.mechanic_id,
+                    issue.warehouse_id,
+                    issue.mechanic_name
+                )
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
     }
 
     sqlx::query!(

@@ -7,4 +7,6 @@ pub mod issue;
 pub mod master;
 pub mod replenishment;
 pub mod reports;
+pub mod returns;
 pub mod sync;
+

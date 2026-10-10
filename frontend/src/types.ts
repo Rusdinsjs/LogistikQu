@@ -55,6 +55,31 @@ export interface SparePart {
   default_max_stock: number;
   qr_code?: string;
   is_active: boolean;
+  requires_core_return: boolean;
+}
+
+export interface UpdateSparePartPayload {
+  requires_core_return?: boolean;
+  requires_issue_approval?: boolean;
+  critical_level?: 'NORMAL' | 'WARNING' | 'CRITICAL';
+}
+
+export interface CreateEquipmentPayload {
+  id?: string;
+  unit_number: string;
+  name: string;
+  equipment_type_id?: string;
+  serial_number?: string;
+  current_hm_km?: number;
+  current_site_id?: string;
+}
+
+export interface CreateEmployeePayload {
+  id?: string;
+  name: string;
+  department_id?: string;
+  is_mechanic?: boolean;
+  position?: string;
 }
 
 export interface Equipment {
@@ -113,6 +138,7 @@ export interface InventoryStockItem {
   rack_location?: string;
   critical_level: string;
   requires_issue_approval: boolean;
+  requires_core_return: boolean;
   status: 'NORMAL' | 'WARNING' | 'CRITICAL';
   updated_at: string;
 }
@@ -153,6 +179,8 @@ export interface CreateIssuePayload {
   maintenance_type?: string;
   priority?: string;
   notes?: string;
+  evidence_photo_url?: string;
+  document_url?: string;
   items: CreateIssueItem[];
 }
 
@@ -171,6 +199,8 @@ export interface IssueTransaction {
   priority: string;
   status: 'COMPLETED' | 'PENDING_APPROVAL' | 'REJECTED';
   notes?: string;
+  evidence_photo_url?: string;
+  document_url?: string;
   created_at: string;
 }
 
@@ -332,5 +362,50 @@ export interface UpdateUserPayload {
   role_id?: string;
   is_active?: boolean;
   warehouse_ids?: string[];
+}
+
+export interface UsedPartReturn {
+  id: string;
+  return_number: string;
+  issue_transaction_id: string;
+  spare_part_id: string;
+  part_name?: string;
+  qty: number;
+  unit_of_measure: string;
+  unit_number: string;
+  mechanic_name: string;
+  mechanic_id?: string;
+  warehouse_id: string;
+  warehouse_name?: string;
+  status: 'PENDING_RETURN' | 'RECEIVED_AT_CONTAINER' | 'TRANSFERRED_TO_MAIN' | 'COMPLETED';
+  current_holder_type: 'MECHANIC' | 'CONTAINER_ADMIN' | 'MAIN_ADMIN' | 'COMPLETED';
+  current_holder_name: string;
+  container_received_at?: string;
+  container_received_by?: string;
+  container_received_by_name?: string;
+  container_notes?: string;
+  container_photo_url?: string;
+  main_received_at?: string;
+  main_received_by?: string;
+  main_received_by_name?: string;
+  main_warehouse_id?: string;
+  main_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReceiveContainerReturnPayload {
+  container_notes?: string;
+  container_photo_url?: string;
+}
+
+export interface TransferMainReturnPayload {
+  main_warehouse_id?: string;
+  main_notes?: string;
+}
+
+export interface CompleteReturnPayload {
+  final_notes?: string;
+  disposition?: string;
 }
 

@@ -17,12 +17,18 @@ use handlers::{
         get_dashboard_summary, get_stock_movements, import_initial_stock, list_inventory_stock,
     },
     issue::{approve_critical_issue, create_issue, get_issue_detail, list_issues},
-    master::{list_employees, list_equipment, list_sites, list_spare_parts, list_warehouses},
+    master::{
+        create_employee, create_equipment, list_employees, list_equipment, list_sites,
+        list_spare_parts, list_warehouses, update_spare_part,
+    },
     replenishment::{
         approve_request, create_request, get_recommendations, get_request_detail, list_requests,
         receive_drop, return_to_container, supervisor_reject, verify_request,
     },
     reports::{report_by_mechanic, report_by_site, report_by_unit},
+    returns::{
+        complete_return, get_return_detail, list_returns, receive_at_container, transfer_to_main,
+    },
     sync::{sync_pull, sync_push},
 };
 
@@ -38,8 +44,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/roles", get(list_roles))
         // Master
         .route("/master/spare-parts", get(list_spare_parts))
-        .route("/master/equipment", get(list_equipment))
-        .route("/master/employees", get(list_employees))
+        .route("/master/spare-parts/{id}", put(update_spare_part))
+        .route("/master/equipment", get(list_equipment).post(create_equipment))
+        .route("/master/employees", get(list_employees).post(create_employee))
         .route("/master/sites", get(list_sites))
         .route("/master/warehouses", get(list_warehouses))
         // Inventory
@@ -51,6 +58,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/issues", post(create_issue).get(list_issues))
         .route("/issues/{id}", get(get_issue_detail))
         .route("/issues/{id}/approve", post(approve_critical_issue))
+        // Used Part Return Tracking (Core Return)
+        .route("/returns", get(list_returns))
+        .route("/returns/{id}", get(get_return_detail))
+        .route("/returns/{id}/receive-container", post(receive_at_container))
+        .route("/returns/{id}/transfer-main", post(transfer_to_main))
+        .route("/returns/{id}/complete", post(complete_return))
         // Replenishment
         .route("/replenishment/recommendations", get(get_recommendations))
         .route("/replenishment/requests", post(create_request).get(list_requests))

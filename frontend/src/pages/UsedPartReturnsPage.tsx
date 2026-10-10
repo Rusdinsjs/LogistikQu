@@ -1,0 +1,1020 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { returnsApi, masterApi } from '../api';
+import type { UsedPartReturn, WarehouseInfo } from '../types';
+import {
+  RotateCcw,
+  CheckCircle,
+  Clock,
+  ArrowRight,
+  Search,
+  Building2,
+  User,
+  Truck,
+  Camera,
+  Layers,
+  X,
+  Eye,
+  RefreshCw,
+  Archive,
+  FileCheck,
+} from 'lucide-react';
+
+export const UsedPartReturnsPage: React.FC = () => {
+  const { user } = useAuth();
+
+  const [returns, setReturns] = useState<UsedPartReturn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [filterWarehouse, setFilterWarehouse] = useState<string>('');
+  const [warehouseList, setWarehouseList] = useState<WarehouseInfo[]>([]);
+
+  // Modals for actions
+  const [selectedReturn, setSelectedReturn] = useState<UsedPartReturn | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Receive Container Modal
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [receiveNotes, setReceiveNotes] = useState('');
+  const [receivePhotoUrl, setReceivePhotoUrl] = useState<string | null>(null);
+  const [submittingAction, setSubmittingAction] = useState(false);
+  const receivePhotoRef = useRef<HTMLInputElement>(null);
+
+  // Transfer Main Modal
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [mainWarehouseId, setMainWarehouseId] = useState('WH-MAIN-CENTRAL');
+  const [transferNotes, setTransferNotes] = useState('');
+
+  // Complete Return Modal
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [disposition, setDisposition] = useState('SCRAP');
+  const [finalNotes, setFinalNotes] = useState('');
+
+  // Preview Image Modal
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const loadReturns = async () => {
+    try {
+      setLoading(true);
+      const data = await returnsApi.getReturns({
+        warehouse_id: filterWarehouse || undefined,
+        search: search || undefined,
+      });
+      setReturns(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        const whs = await masterApi.getWarehouses();
+        setWarehouseList(whs);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchWarehouses();
+  }, []);
+
+  useEffect(() => {
+    loadReturns();
+  }, [filterWarehouse]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loadReturns();
+  };
+
+  // Image Upload with canvas compression for container receipt
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDimension = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        setReceivePhotoUrl(dataUrl);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Receive at Container
+  const handleConfirmReceive = async () => {
+    if (!selectedReturn) return;
+    setSubmittingAction(true);
+    try {
+      await returnsApi.receiveAtContainer(selectedReturn.id, {
+        container_notes: receiveNotes || undefined,
+        container_photo_url: receivePhotoUrl || undefined,
+      });
+      setShowReceiveModal(false);
+      setReceiveNotes('');
+      setReceivePhotoUrl(null);
+      setSelectedReturn(null);
+      await loadReturns();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menerima part bekas di gudang kontainer');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Handle Transfer to Main Warehouse
+  const handleConfirmTransfer = async () => {
+    if (!selectedReturn) return;
+    setSubmittingAction(true);
+    try {
+      await returnsApi.transferToMain(selectedReturn.id, {
+        main_warehouse_id: mainWarehouseId || undefined,
+        main_notes: transferNotes || undefined,
+      });
+      setShowTransferModal(false);
+      setTransferNotes('');
+      setSelectedReturn(null);
+      await loadReturns();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menyerahkan part bekas ke gudang utama');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Handle Complete Return
+  const handleConfirmComplete = async () => {
+    if (!selectedReturn) return;
+    setSubmittingAction(true);
+    try {
+      await returnsApi.completeReturn(selectedReturn.id, {
+        disposition: disposition || undefined,
+        final_notes: finalNotes || undefined,
+      });
+      setShowCompleteModal(false);
+      setFinalNotes('');
+      setSelectedReturn(null);
+      await loadReturns();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menyelesaikan disposisi part bekas');
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Group returns by status
+  const pendingMechanic = returns.filter((r) => r.status === 'PENDING_RETURN');
+  const atContainer = returns.filter((r) => r.status === 'RECEIVED_AT_CONTAINER');
+  const atMain = returns.filter((r) => r.status === 'TRANSFERRED_TO_MAIN');
+  const completed = returns.filter((r) => r.status === 'COMPLETED');
+
+  const mainWarehouses = warehouseList.filter((w) => w.warehouse_type === 'MAIN');
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="glass-panel rounded-2xl p-6 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-amber-400" />
+            Pelacakan Retur Spare Part Bekas (Core Return Tracking)
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Monitoring fisik part rusak yang wajib dikembalikan saat servis, dengan penanggung jawab real-time berjenjang (Mekanik &rarr; Admin Kontainer &rarr; Admin Gudang Utama).
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          <button
+            onClick={loadReturns}
+            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 transition-colors border border-slate-700"
+            title="Muat Ulang Data"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="glass-panel rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+        <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            placeholder="Cari nomor retur, kode part, mekanik, atau unit lambung..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+          />
+        </form>
+
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
+          <select
+            value={filterWarehouse}
+            onChange={(e) => setFilterWarehouse(e.target.value)}
+            className="w-full md:w-56 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+          >
+            <option value="">Semua Gudang Asal</option>
+            {warehouseList.map((w: WarehouseInfo) => (
+              <option key={w.id} value={w.id}>
+                {w.name} ({w.warehouse_type})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Summary KPI Badges */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="glass-panel rounded-xl p-3 border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-amber-400">Di Tangan Mekanik</span>
+            <Clock className="w-4 h-4 text-amber-400" />
+          </div>
+          <p className="text-xl font-bold font-mono text-white mt-1">{pendingMechanic.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Wajib diserahkan ke kontainer</p>
+        </div>
+
+        <div className="glass-panel rounded-xl p-3 border border-cyan-500/30 bg-cyan-500/5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-cyan-400">Di Gudang Kontainer</span>
+            <Layers className="w-4 h-4 text-cyan-400" />
+          </div>
+          <p className="text-xl font-bold font-mono text-white mt-1">{atContainer.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Telah diterima admin kontainer</p>
+        </div>
+
+        <div className="glass-panel rounded-xl p-3 border border-blue-500/30 bg-blue-500/5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-blue-400">Di Gudang Utama</span>
+            <Building2 className="w-4 h-4 text-blue-400" />
+          </div>
+          <p className="text-xl font-bold font-mono text-white mt-1">{atMain.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Menunggu disposisi/inspeksi</p>
+        </div>
+
+        <div className="glass-panel rounded-xl p-3 border border-emerald-500/30 bg-emerald-500/5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-emerald-400">Selesai / Scrap</span>
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+          </div>
+          <p className="text-xl font-bold font-mono text-white mt-1">{completed.length}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Tuntas (Scrap/Refurbish)</p>
+        </div>
+      </div>
+
+      {/* 4-Column Board */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+        {/* Column 1: Di Tangan Mekanik */}
+        <div className="glass-panel rounded-2xl p-4 border border-amber-500/20 bg-slate-900/40 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                1. Di Tangan Mekanik ({pendingMechanic.length})
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 min-h-[300px]">
+            {pendingMechanic.length === 0 ? (
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part tertahan di mekanik.</p>
+            ) : (
+              pendingMechanic.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-xl p-3 border border-amber-500/30 hover:border-amber-400/60 transition-all space-y-2 bg-slate-900/80"
+                >
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-mono font-bold text-amber-300">{item.return_number}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">
+                      Pending
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-white line-clamp-1">
+                      {item.spare_part_id} - {item.part_name || 'Part'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Jumlah: <span className="font-mono text-slate-200 font-bold">{item.qty} {item.unit_of_measure}</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-amber-200">
+                      <User className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span className="font-semibold truncate">P.J: Mekanik {item.current_holder_name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Truck className="w-3 h-3 shrink-0" />
+                      <span>Unit: {item.unit_number}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Building2 className="w-3 h-3 shrink-0" />
+                      <span>Gudang: {item.warehouse_name || item.warehouse_id}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowDetailModal(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px]"
+                      title="Lihat Detail"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowReceiveModal(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-[11px] border border-cyan-500/40 flex items-center justify-center gap-1 transition-colors"
+                    >
+                      <CheckCircle className="w-3 h-3" />
+                      <span>Terima di Kontainer</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Column 2: Di Gudang Kontainer */}
+        <div className="glass-panel rounded-2xl p-4 border border-cyan-500/20 bg-slate-900/40 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                2. Di Gudang Kontainer ({atContainer.length})
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 min-h-[300px]">
+            {atContainer.length === 0 ? (
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part di kontainer.</p>
+            ) : (
+              atContainer.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-xl p-3 border border-cyan-500/30 hover:border-cyan-400/60 transition-all space-y-2 bg-slate-900/80"
+                >
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-mono font-bold text-cyan-300">{item.return_number}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 text-[10px] font-bold">
+                      Di Kontainer
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-white line-clamp-1">
+                      {item.spare_part_id} - {item.part_name || 'Part'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Jumlah: <span className="font-mono text-slate-200 font-bold">{item.qty} {item.unit_of_measure}</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-cyan-200">
+                      <User className="w-3 h-3 text-cyan-400 shrink-0" />
+                      <span className="font-semibold truncate">P.J: {item.current_holder_name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Clock className="w-3 h-3 shrink-0" />
+                      <span>
+                        Diterima: {item.container_received_at ? new Date(item.container_received_at).toLocaleDateString('id-ID') : '-'}
+                      </span>
+                    </div>
+                    {item.container_photo_url && (
+                      <div className="pt-1 flex items-center gap-1.5">
+                        <Camera className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage(item.container_photo_url || null)}
+                          className="text-cyan-400 hover:underline text-[10px]"
+                        >
+                          Lihat Foto Fisik
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowDetailModal(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px]"
+                      title="Lihat Detail"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowTransferModal(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] border border-blue-500/40 flex items-center justify-center gap-1 transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3" />
+                      <span>Kirim ke Gudang Utama</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Column 3: Di Gudang Utama */}
+        <div className="glass-panel rounded-2xl p-4 border border-blue-500/20 bg-slate-900/40 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                3. Di Gudang Utama ({atMain.length})
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 min-h-[300px]">
+            {atMain.length === 0 ? (
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part di gudang utama.</p>
+            ) : (
+              atMain.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-xl p-3 border border-blue-500/30 hover:border-blue-400/60 transition-all space-y-2 bg-slate-900/80"
+                >
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-mono font-bold text-blue-300">{item.return_number}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">
+                      Gudang Utama
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-white line-clamp-1">
+                      {item.spare_part_id} - {item.part_name || 'Part'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Jumlah: <span className="font-mono text-slate-200 font-bold">{item.qty} {item.unit_of_measure}</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-blue-200">
+                      <User className="w-3 h-3 text-blue-400 shrink-0" />
+                      <span className="font-semibold truncate">P.J: {item.current_holder_name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Building2 className="w-3 h-3 shrink-0" />
+                      <span>Lokasi: {item.main_warehouse_id || 'Gudang Utama'}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowDetailModal(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px]"
+                      title="Lihat Detail"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowCompleteModal(true);
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[11px] border border-emerald-500/40 flex items-center justify-center gap-1 transition-colors"
+                    >
+                      <Archive className="w-3 h-3" />
+                      <span>Selesaikan / Disposisi</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Column 4: Selesai / Disposisi */}
+        <div className="glass-panel rounded-2xl p-4 border border-emerald-500/20 bg-slate-900/40 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                4. Selesai / Disposisi ({completed.length})
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-3 min-h-[300px]">
+            {completed.length === 0 ? (
+              <p className="text-center text-slate-500 text-xs py-10">Belum ada riwayat retur tuntas.</p>
+            ) : (
+              completed.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-card rounded-xl p-3 border border-emerald-500/20 space-y-2 bg-slate-900/60 opacity-90"
+                >
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-mono font-bold text-emerald-300">{item.return_number}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                      Tuntas
+                    </span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-slate-200 line-clamp-1">
+                      {item.spare_part_id} - {item.part_name || 'Part'}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Jumlah: <span className="font-mono text-slate-300 font-bold">{item.qty} {item.unit_of_measure}</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-400 border border-slate-800">
+                    <div className="flex items-center gap-1.5 text-emerald-300">
+                      <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span className="truncate">{item.current_holder_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReturn(item);
+                        setShowDetailModal(true);
+                      }}
+                      className="py-1 px-2.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px] flex items-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Detail Riwayat</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modal 1: Terima di Gudang Kontainer */}
+      {showReceiveModal && selectedReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <CheckCircle className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">Terima Part Bekas di Kontainer</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReceiveModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-slate-400">No Retur:</span>
+                <span className="text-cyan-300 font-bold">{selectedReturn.return_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Part:</span>
+                <span className="text-white">{selectedReturn.spare_part_id} ({selectedReturn.qty} {selectedReturn.unit_of_measure})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Mekanik Penyerah:</span>
+                <span className="text-amber-300">{selectedReturn.mechanic_name}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Catatan Kondisi Fisik Part (Opsional)</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Bodi turbo retak dan bearing pecah..."
+                  value={receiveNotes}
+                  onChange={(e) => setReceiveNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Foto Bukti Fisik Part Bekas (Opsional)</label>
+                <input
+                  type="file"
+                  ref={receivePhotoRef}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoSelect}
+                  className="hidden"
+                />
+                {receivePhotoUrl ? (
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800">
+                    <img
+                      src={receivePhotoUrl}
+                      alt="Bukti Fisik Part Bekas"
+                      className="w-12 h-12 object-cover rounded border border-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setReceivePhotoUrl(null)}
+                      className="text-rose-400 hover:text-rose-300 text-xs"
+                    >
+                      Hapus Foto
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => receivePhotoRef.current?.click()}
+                    className="w-full py-2.5 px-3 rounded-lg border border-dashed border-slate-700 hover:border-cyan-500 bg-slate-900/60 text-slate-300 text-xs flex items-center justify-center gap-2"
+                  >
+                    <Camera className="w-4 h-4 text-cyan-400" />
+                    <span>Ambil Foto Kondisi Part Bekas</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Setelah dikonfirmasi, penanggung jawab fisik akan otomatis berpindah dari Mekanik ke <span className="text-cyan-300 font-bold">Admin Kontainer ({user?.full_name})</span>.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowReceiveModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReceive}
+                disabled={submittingAction}
+                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs disabled:opacity-50"
+              >
+                {submittingAction ? 'Memproses...' : 'Konfirmasi Penerimaan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Transfer ke Gudang Utama */}
+      {showTransferModal && selectedReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl border border-blue-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-blue-400">
+                <ArrowRight className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">Serah Terima ke Gudang Utama</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-slate-400">No Retur:</span>
+                <span className="text-blue-300 font-bold">{selectedReturn.return_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Part:</span>
+                <span className="text-white">{selectedReturn.spare_part_id}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Gudang Utama Tujuan *</label>
+                <select
+                  value={mainWarehouseId}
+                  onChange={(e) => setMainWarehouseId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-blue-500 focus:outline-none"
+                >
+                  {mainWarehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.id})
+                    </option>
+                  ))}
+                  {mainWarehouses.length === 0 && (
+                    <option value="WH-MAIN-CENTRAL">Gudang Utama Central (WH-MAIN-CENTRAL)</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Catatan Serah Terima (Opsional)</label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Dikirim bersama rombongan logistik..."
+                  value={transferNotes}
+                  onChange={(e) => setTransferNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Penanggung jawab fisik akan dipindahkan ke <span className="text-blue-300 font-bold">Admin Gudang Utama</span>.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTransfer}
+                disabled={submittingAction}
+                className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-400 text-slate-950 font-bold text-xs disabled:opacity-50"
+              >
+                {submittingAction ? 'Memproses...' : 'Konfirmasi Serah Terima'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Selesaikan Disposisi (Scrap / Refurbish) */}
+      {showCompleteModal && selectedReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl border border-emerald-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <Archive className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">Selesaikan Disposisi Part Bekas</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCompleteModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-slate-400">No Retur:</span>
+                <span className="text-emerald-300 font-bold">{selectedReturn.return_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Part:</span>
+                <span className="text-white">{selectedReturn.spare_part_id}</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Keputusan Disposisi Akhir *</label>
+                <select
+                  value={disposition}
+                  onChange={(e) => setDisposition(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-emerald-500 focus:outline-none"
+                >
+                  <option value="SCRAP">Scrap (Limbah Logam / Besi Tua)</option>
+                  <option value="REFURBISH">Refurbish (Fabrikasi / Perbaikan Komponen)</option>
+                  <option value="CORE_EXCHANGE">Core Exchange (Tukar Tambah dengan Vendor)</option>
+                  <option value="INSPECTION_STORED">Simpan di Gudang Scrap/Karantina</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Catatan Akhir Disposisi</label>
+                <input
+                  type="text"
+                  placeholder="Keterangan berita acara scrap / nomor BAP..."
+                  value={finalNotes}
+                  onChange={(e) => setFinalNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCompleteModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmComplete}
+                disabled={submittingAction}
+                className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs disabled:opacity-50"
+              >
+                {submittingAction ? 'Menyimpan...' : 'Selesaikan Retur'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Detail & Audit Trail */}
+      {showDetailModal && selectedReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-lg rounded-2xl border border-slate-700 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <FileCheck className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">Audit Trail Pelacakan Part Bekas</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-950/80 rounded-xl border border-slate-800 font-mono text-xs space-y-2">
+              <div className="flex justify-between border-b border-slate-800 pb-2">
+                <span className="text-slate-400">Nomor Retur:</span>
+                <span className="text-cyan-300 font-bold">{selectedReturn.return_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Suku Cadang:</span>
+                <span className="text-white">{selectedReturn.spare_part_id} - {selectedReturn.part_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Jumlah:</span>
+                <span className="text-white">{selectedReturn.qty} {selectedReturn.unit_of_measure}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Unit Terkait:</span>
+                <span className="text-white">{selectedReturn.unit_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Penanggung Jawab Sekarang:</span>
+                <span className="text-amber-300 font-bold">{selectedReturn.current_holder_name} ({selectedReturn.current_holder_type})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Status Fisik:</span>
+                <span className="text-emerald-300">{selectedReturn.status}</span>
+              </div>
+
+              {/* Timeline Serah Terima */}
+              <div className="pt-3 border-t border-slate-800 space-y-2 font-sans">
+                <p className="text-[11px] font-bold text-slate-300">Riwayat Berjenjang:</p>
+
+                <div className="space-y-1.5 text-[11px]">
+                  <div className="flex items-start gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 mt-1 shrink-0"></span>
+                    <div>
+                      <p className="font-semibold text-slate-200">1. Dikeluarkan dari POS ke Mekanik</p>
+                      <p className="text-slate-400 text-[10px]">
+                        Mekanik: {selectedReturn.mechanic_name} | {new Date(selectedReturn.created_at).toLocaleString('id-ID')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedReturn.container_received_at && (
+                    <div className="flex items-start gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 mt-1 shrink-0"></span>
+                      <div>
+                        <p className="font-semibold text-slate-200">2. Diterima di Gudang Kontainer</p>
+                        <p className="text-slate-400 text-[10px]">
+                          Oleh: {selectedReturn.container_received_by_name || 'Admin'} | {new Date(selectedReturn.container_received_at).toLocaleString('id-ID')}
+                        </p>
+                        {selectedReturn.container_notes && (
+                          <p className="text-cyan-300 text-[10px] italic">"{selectedReturn.container_notes}"</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedReturn.main_received_at && (
+                    <div className="flex items-start gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 mt-1 shrink-0"></span>
+                      <div>
+                        <p className="font-semibold text-slate-200">3. Diterima di Gudang Utama</p>
+                        <p className="text-slate-400 text-[10px]">
+                          Oleh: {selectedReturn.main_received_by_name || 'Admin'} | Lokasi: {selectedReturn.main_warehouse_id} | {new Date(selectedReturn.main_received_at).toLocaleString('id-ID')}
+                        </p>
+                        {selectedReturn.main_notes && (
+                          <p className="text-blue-300 text-[10px] italic">"{selectedReturn.main_notes}"</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Photo preview in detail */}
+              {selectedReturn.container_photo_url && (
+                <div className="pt-2 border-t border-slate-800">
+                  <span className="text-slate-400 text-[10px] block mb-1">Foto Bukti Fisik di Kontainer:</span>
+                  <img
+                    src={selectedReturn.container_photo_url}
+                    alt="Foto Part Bekas"
+                    className="w-28 h-28 object-cover rounded border border-slate-700 cursor-pointer"
+                    onClick={() => setPreviewImage(selectedReturn.container_photo_url || null)}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-2xl max-h-[85vh] p-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-3 -right-3 p-1.5 bg-slate-800 text-white rounded-full hover:bg-slate-700 shadow-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Foto Penuh"
+              className="rounded-xl max-w-full max-h-[80vh] object-contain border border-slate-700 shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

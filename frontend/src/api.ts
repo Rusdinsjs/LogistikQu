@@ -27,6 +27,13 @@ import type {
   CreateUserPayload,
   UpdateUserPayload,
   UpdateProfilePayload,
+  CreateEquipmentPayload,
+  CreateEmployeePayload,
+  UpdateSparePartPayload,
+  UsedPartReturn,
+  ReceiveContainerReturnPayload,
+  TransferMainReturnPayload,
+  CompleteReturnPayload,
 } from './types';
 
 export const api = axios.create({
@@ -82,6 +89,18 @@ export const masterApi = {
   },
   getWarehouses: async () => {
     const res = await api.get<WarehouseInfo[]>('/master/warehouses');
+    return res.data;
+  },
+  createEquipment: async (payload: CreateEquipmentPayload) => {
+    const res = await api.post<{ success: boolean; equipment_id: string; message: string }>('/master/equipment', payload);
+    return res.data;
+  },
+  createEmployee: async (payload: CreateEmployeePayload) => {
+    const res = await api.post<{ success: boolean; employee_id: string; message: string }>('/master/employees', payload);
+    return res.data;
+  },
+  updateSparePart: async (id: string, payload: UpdateSparePartPayload) => {
+    const res = await api.put<{ success: boolean; message: string }>(`/master/spare-parts/${id}`, payload);
     return res.data;
   },
 };
@@ -246,6 +265,29 @@ export const userApi = {
   },
   updateUser: async (id: string, payload: UpdateUserPayload) => {
     const res = await api.put<{ success: boolean; message: string }>(`/users/${id}`, payload);
+    return res.data;
+  },
+};
+
+export const returnsApi = {
+  getReturns: async (params?: { warehouse_id?: string; status?: string; search?: string }) => {
+    const res = await api.get<UsedPartReturn[]>('/returns', { params });
+    return res.data;
+  },
+  getDetail: async (id: string) => {
+    const res = await api.get<UsedPartReturn>(`/returns/${id}`);
+    return res.data;
+  },
+  receiveAtContainer: async (id: string, payload: ReceiveContainerReturnPayload) => {
+    const res = await api.post<{ success: boolean; message: string }>(`/returns/${id}/receive-container`, payload);
+    return res.data;
+  },
+  transferToMain: async (id: string, payload: TransferMainReturnPayload) => {
+    const res = await api.post<{ success: boolean; message: string }>(`/returns/${id}/transfer-main`, payload);
+    return res.data;
+  },
+  completeReturn: async (id: string, payload: CompleteReturnPayload) => {
+    const res = await api.post<{ success: boolean; message: string }>(`/returns/${id}/complete`, payload);
     return res.data;
   },
 };

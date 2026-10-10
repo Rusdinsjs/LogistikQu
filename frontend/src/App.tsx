@@ -13,6 +13,7 @@ import { MasterPage } from './pages/MasterPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AuditPage } from './pages/AuditPage';
 import { UsersPage } from './pages/UsersPage';
+import { UsedPartReturnsPage } from './pages/UsedPartReturnsPage';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ const AppContent: React.FC = () => {
             {currentTab === 'dashboard' && <DashboardPage onNavigate={setCurrentTab} />}
             {currentTab === 'inventory' && <InventoryPage />}
             {currentTab === 'pos' && <PosIssuePage />}
+            {currentTab === 'returns' && <UsedPartReturnsPage />}
             {currentTab === 'replenishment' && <ReplenishmentPage />}
             {currentTab === 'drops' && <DropHistoryPage />}
             {currentTab === 'adjustment' && <AdjustmentPage />}

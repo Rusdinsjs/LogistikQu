@@ -11,12 +11,14 @@ import {
   BarChart3,
   History,
   Users,
+  RotateCcw,
 } from 'lucide-react';
 
 export type TabId =
   | 'dashboard'
   | 'inventory'
   | 'pos'
+  | 'returns'
   | 'replenishment'
   | 'drops'
   | 'adjustment'
@@ -42,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Monitoring Stok', icon: Boxes },
     { id: 'pos', label: 'POS Issue Spare Part', icon: ShoppingCart },
+    { id: 'returns', label: 'Retur Part Bekas', icon: RotateCcw },
     { id: 'replenishment', label: 'Alur Permohonan Stok', icon: GitPullRequest },
     { id: 'drops', label: 'Drop Gudang Utama', icon: Truck },
     { id: 'adjustment', label: 'Stock Opname / Koreksi', icon: Scale },

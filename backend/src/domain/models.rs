@@ -110,6 +110,16 @@ pub struct SparePart {
     pub default_max_stock: Decimal,
     pub qr_code: Option<String>,
     pub is_active: bool,
+    pub requires_core_return: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSparePartRequest {
+    pub requires_core_return: Option<bool>,
+    pub requires_issue_approval: Option<bool>,
+    pub critical_level: Option<String>,
+    pub default_min_stock: Option<Decimal>,
+    pub default_max_stock: Option<Decimal>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -126,6 +136,17 @@ pub struct Equipment {
     pub is_active: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateEquipmentRequest {
+    pub id: Option<String>,
+    pub unit_number: String,
+    pub name: String,
+    pub equipment_type_id: Option<String>,
+    pub serial_number: Option<String>,
+    pub current_hm_km: Option<Decimal>,
+    pub current_site_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Employee {
     pub id: String,
@@ -134,6 +155,15 @@ pub struct Employee {
     pub is_mechanic: bool,
     pub position: Option<String>,
     pub is_active: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateEmployeeRequest {
+    pub id: Option<String>,
+    pub name: String,
+    pub department_id: Option<String>,
+    pub is_mechanic: Option<bool>,
+    pub position: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -162,6 +192,7 @@ pub struct InventoryStockItem {
     pub rack_location: Option<String>,
     pub critical_level: String,
     pub requires_issue_approval: bool,
+    pub requires_core_return: bool,
     pub status: String, // 'NORMAL', 'WARNING', 'CRITICAL'
     pub updated_at: DateTime<Utc>,
 }
@@ -210,6 +241,8 @@ pub struct CreateIssueRequest {
     pub longitude: Option<Decimal>,
     pub device_id: Option<String>,
     pub client_uuid: Option<Uuid>,
+    pub evidence_photo_url: Option<String>,
+    pub document_url: Option<String>,
     pub items: Vec<CreateIssueItem>,
 }
 
@@ -235,6 +268,8 @@ pub struct IssueTransaction {
     pub priority: String,
     pub status: String,
     pub notes: Option<String>,
+    pub evidence_photo_url: Option<String>,
+    pub document_url: Option<String>,
     pub created_by: Uuid,
     pub approved_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
@@ -379,4 +414,54 @@ pub struct DashboardSummary {
     pub today_items_released: Decimal,
     pub pending_requests_count: i64,
     pub active_warehouses_count: i64,
+}
+
+// --- Used Part Return Tracking (Core Return) ---
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct UsedPartReturn {
+    pub id: Uuid,
+    pub return_number: String,
+    pub issue_transaction_id: Uuid,
+    pub spare_part_id: String,
+    pub part_name: Option<String>,
+    pub qty: Decimal,
+    pub unit_of_measure: String,
+    pub unit_number: String,
+    pub mechanic_name: String,
+    pub mechanic_id: Option<String>,
+    pub warehouse_id: String,
+    pub warehouse_name: Option<String>,
+    pub status: String,
+    pub current_holder_type: String,
+    pub current_holder_name: String,
+    pub container_received_at: Option<DateTime<Utc>>,
+    pub container_received_by: Option<Uuid>,
+    pub container_received_by_name: Option<String>,
+    pub container_notes: Option<String>,
+    pub container_photo_url: Option<String>,
+    pub main_received_at: Option<DateTime<Utc>>,
+    pub main_received_by: Option<Uuid>,
+    pub main_received_by_name: Option<String>,
+    pub main_warehouse_id: Option<String>,
+    pub main_notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReceiveContainerReturnRequest {
+    pub container_notes: Option<String>,
+    pub container_photo_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransferMainReturnRequest {
+    pub main_warehouse_id: Option<String>,
+    pub main_notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CompleteReturnRequest {
+    pub final_notes: Option<String>,
+    pub disposition: Option<String>,
 }

@@ -38,7 +38,7 @@ pub async fn list_inventory_stock(
                s.spare_part_id, p.part_name, pc.name as category_name,
                p.brand, p.unit_of_measure, s.qty_on_hand, s.min_stock,
                s.max_stock, s.safety_stock, s.rack_location,
-               p.critical_level, p.requires_issue_approval, s.updated_at,
+               p.critical_level, p.requires_issue_approval, p.requires_core_return, s.updated_at,
                CASE
                    WHEN s.qty_on_hand <= s.min_stock THEN 'CRITICAL'
                    WHEN s.qty_on_hand <= (s.min_stock * 1.25) THEN 'WARNING'
@@ -83,6 +83,7 @@ pub async fn list_inventory_stock(
             rack_location: r.rack_location,
             critical_level: r.critical_level,
             requires_issue_approval: r.requires_issue_approval,
+            requires_core_return: r.requires_core_return,
             status: r.status.unwrap_or_else(|| "NORMAL".to_string()),
             updated_at: r.updated_at,
         })

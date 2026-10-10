@@ -35,7 +35,8 @@ pub async fn sync_pull(
         r#"
         SELECT id, part_name, category_id, brand, equipment_category,
                unit_of_measure, critical_level, requires_issue_approval,
-               lead_time_days, default_min_stock, default_max_stock, qr_code, is_active
+               lead_time_days, default_min_stock, default_max_stock, qr_code, is_active,
+               requires_core_return
         FROM spare_parts
         WHERE is_active = TRUE
         ORDER BY id
