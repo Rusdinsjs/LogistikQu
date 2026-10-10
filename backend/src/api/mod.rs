@@ -8,7 +8,10 @@ use axum::{
 use handlers::{
     adjustment::{approve_adjustment, create_adjustment, list_adjustments},
     audit::list_audit_logs,
-    auth::{get_me, list_demo_users, login, AppState},
+    auth::{
+        create_user, get_me, list_demo_users, list_roles, list_users, login, update_user,
+        AppState,
+    },
     drop::{get_drop_detail, list_main_drops},
     inventory::{
         get_dashboard_summary, get_stock_movements, import_initial_stock, list_inventory_stock,
@@ -25,10 +28,13 @@ use handlers::{
 
 pub fn build_router(state: AppState) -> Router {
     let api_routes = Router::new()
-        // Auth
+        // Auth & User Management
         .route("/auth/login", post(login))
         .route("/auth/me", get(get_me))
         .route("/auth/demo-users", get(list_demo_users))
+        .route("/users", get(list_users).post(create_user))
+        .route("/users/{id}", put(update_user))
+        .route("/roles", get(list_roles))
         // Master
         .route("/master/spare-parts", get(list_spare_parts))
         .route("/master/equipment", get(list_equipment))

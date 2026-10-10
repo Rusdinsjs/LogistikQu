@@ -1,5 +1,8 @@
 use crate::{
-    api::{handlers::auth::AppState, middleware::AuthUser},
+    api::{
+        handlers::auth::AppState,
+        middleware::{check_warehouse_access, get_user_warehouse_ids, AuthUser},
+    },
     domain::models::{MainDrop, MainDropItemDetail},
     error::AppError,
 };
@@ -18,10 +21,11 @@ pub struct DropFilterQuery {
 
 pub async fn list_main_drops(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
     Query(query): Query<DropFilterQuery>,
 ) -> Result<Json<Vec<MainDrop>>, AppError> {
     let wh_filter = query.container_warehouse_id.unwrap_or_default();
+    let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
 
     let items = sqlx::query_as!(
         MainDrop,
@@ -31,10 +35,12 @@ pub async fn list_main_drops(
                shipped_at, received_at, notes
         FROM main_warehouse_drops
         WHERE ($1 = '' OR container_warehouse_id = $1)
+          AND (main_warehouse_id = ANY($2) OR container_warehouse_id = ANY($2))
         ORDER BY shipped_at DESC
         LIMIT 100
         "#,
-        wh_filter
+        wh_filter,
+        &user_whs[..]
     )
     .fetch_all(&state.pool)
     .await?;
@@ -44,15 +50,15 @@ pub async fn list_main_drops(
 
 pub async fn get_drop_detail(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let drop = sqlx::query_as!(
         MainDrop,
         r#"
         SELECT id, drop_number, request_id, main_warehouse_id,
-               container_warehouse_id, status, dropped_by, received_by,
-               shipped_at, received_at, notes
+                   container_warehouse_id, status, dropped_by, received_by,
+                   shipped_at, received_at, notes
         FROM main_warehouse_drops
         WHERE id = $1
         "#,
@@ -61,6 +67,12 @@ pub async fn get_drop_detail(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Data drop/suplai tidak ditemukan".to_string()))?;
+
+    let has_main = check_warehouse_access(&state.pool, &user, &drop.main_warehouse_id).await.is_ok();
+    let has_cont = check_warehouse_access(&state.pool, &user, &drop.container_warehouse_id).await.is_ok();
+    if !has_main && !has_cont {
+        return Err(AppError::Forbidden("Anda tidak memiliki akses ke gudang terkait pengiriman ini".to_string()));
+    }
 
     let items = sqlx::query_as!(
         MainDropItemDetail,

@@ -287,3 +287,37 @@ export interface AuditLog {
   new_values?: any;
   created_at: string;
 }
+
+export interface UserManagementItem {
+  id: string;
+  username: string;
+  full_name: string;
+  role_id: string;
+  role_name: string;
+  is_active: boolean;
+  warehouses: WarehouseInfo[];
+  created_at: string;
+}
+
+export interface RoleItem {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface CreateUserPayload {
+  username: string;
+  password: string;
+  full_name: string;
+  role_id: string;
+  warehouse_ids: string[];
+}
+
+export interface UpdateUserPayload {
+  full_name?: string;
+  password?: string;
+  role_id?: string;
+  is_active?: boolean;
+  warehouse_ids?: string[];
+}
+

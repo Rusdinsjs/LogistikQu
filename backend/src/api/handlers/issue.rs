@@ -359,6 +359,8 @@ pub async fn approve_critical_issue(
     .await?
     .ok_or_else(|| AppError::NotFound("Transaksi tidak ditemukan".to_string()))?;
 
+    check_warehouse_access(&state.pool, &user, &issue.warehouse_id).await?;
+
     if issue.status != "PENDING_APPROVAL" {
         return Err(AppError::BadRequest("Transaksi tidak dalam status menunggu approval".to_string()));
     }

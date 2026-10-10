@@ -46,7 +46,7 @@ pub async fn check_warehouse_access(
     user: &Claims,
     warehouse_id: &str,
 ) -> Result<(), AppError> {
-    if user.role_id == "SUPER_ADMIN" {
+    if user.role_id == "SUPER_ADMIN" || user.role_id == "MANAGER" {
         return Ok(());
     }
 
@@ -79,7 +79,7 @@ pub async fn check_permission(
     user: &Claims,
     permission_id: &str,
 ) -> Result<(), AppError> {
-    if user.role_id == "SUPER_ADMIN" {
+    if user.role_id == "SUPER_ADMIN" || user.role_id == "MANAGER" {
         return Ok(());
     }
 
@@ -104,4 +104,26 @@ pub async fn check_permission(
     }
 
     Ok(())
+}
+
+// Helper untuk mendapatkan seluruh daftar warehouse_id yang diizinkan untuk pengguna
+pub async fn get_user_warehouse_ids(
+    pool: &PgPool,
+    user: &Claims,
+) -> Result<Vec<String>, AppError> {
+    if user.role_id == "SUPER_ADMIN" || user.role_id == "MANAGER" {
+        let all = sqlx::query_scalar::<_, String>("SELECT id FROM warehouses ORDER BY id")
+            .fetch_all(pool)
+            .await?;
+        return Ok(all);
+    }
+
+    let list = sqlx::query_scalar::<_, String>(
+        "SELECT warehouse_id FROM user_warehouses WHERE user_id = $1 ORDER BY warehouse_id"
+    )
+    .bind(user.sub)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(list)
 }

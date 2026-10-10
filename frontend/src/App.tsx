@@ -12,6 +12,7 @@ import { AdjustmentPage } from './pages/AdjustmentPage';
 import { MasterPage } from './pages/MasterPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { AuditPage } from './pages/AuditPage';
+import { UsersPage } from './pages/UsersPage';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -53,6 +54,7 @@ const AppContent: React.FC = () => {
             {currentTab === 'master' && <MasterPage />}
             {currentTab === 'reports' && <ReportsPage />}
             {currentTab === 'audit' && <AuditPage />}
+            {currentTab === 'users' && <UsersPage />}
           </div>
         </main>
       </div>

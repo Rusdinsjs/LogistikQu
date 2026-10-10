@@ -1,13 +1,20 @@
 use crate::{
-    api::middleware::AuthUser,
+    api::middleware::{check_permission, AuthUser},
     config::AppConfig,
-    domain::models::{LoginRequest, LoginResponse, UserProfile, WarehouseInfo},
+    domain::models::{
+        CreateUserRequest, LoginRequest, LoginResponse, RoleItem, UpdateUserRequest,
+        UserManagementItem, UserProfile, WarehouseInfo,
+    },
     error::AppError,
-    infrastructure::auth::{create_jwt_token, verify_password},
+    infrastructure::auth::{create_jwt_token, hash_password, verify_password},
 };
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Path, State},
+    Json,
+};
 use serde_json::{json, Value};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -205,4 +212,289 @@ pub async fn list_demo_users(
         .collect();
 
     Ok(Json(json!({ "demo_users": list })))
+}
+
+pub async fn list_roles(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> Result<Json<Vec<RoleItem>>, AppError> {
+    let roles = sqlx::query_as!(
+        RoleItem,
+        r#"
+        SELECT id, name, description
+        FROM roles
+        ORDER BY name
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok(Json(roles))
+}
+
+pub async fn list_users(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+) -> Result<Json<Vec<UserManagementItem>>, AppError> {
+    check_permission(&state.pool, &user, "users.manage").await?;
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT u.id, u.username, u.full_name, u.role_id, u.is_active, u.created_at,
+               COALESCE(r.name, 'GUEST') as role_name
+        FROM users u
+        LEFT JOIN roles r ON u.role_id = r.id
+        ORDER BY u.created_at DESC
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let mut results = Vec::new();
+
+    for r in rows {
+        let whs = sqlx::query_as!(
+            WarehouseInfo,
+            r#"
+            SELECT w.id, w.name, w.warehouse_type, w.category
+            FROM warehouses w
+            INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
+            WHERE uw.user_id = $1
+            ORDER BY w.name
+            "#,
+            r.id
+        )
+        .fetch_all(&state.pool)
+        .await?;
+
+        results.push(UserManagementItem {
+            id: r.id,
+            username: r.username,
+            full_name: r.full_name,
+            role_id: r.role_id.unwrap_or_default(),
+            role_name: r.role_name.unwrap_or_else(|| "GUEST".to_string()),
+            is_active: r.is_active,
+            warehouses: whs,
+            created_at: r.created_at,
+        });
+    }
+
+    Ok(Json(results))
+}
+
+pub async fn create_user(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<CreateUserRequest>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "users.manage").await?;
+
+    let username = payload.username.trim();
+    if username.len() < 3 {
+        return Err(AppError::BadRequest("Username minimal 3 karakter".to_string()));
+    }
+
+    let password = payload.password.trim();
+    if password.len() < 6 {
+        return Err(AppError::BadRequest("Password minimal 6 karakter".to_string()));
+    }
+
+    let full_name = payload.full_name.trim();
+    if full_name.is_empty() {
+        return Err(AppError::BadRequest("Nama lengkap wajib diisi".to_string()));
+    }
+
+    // Check if username already exists
+    let exists = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)",
+        username
+    )
+    .fetch_one(&state.pool)
+    .await?
+    .unwrap_or(false);
+
+    if exists {
+        return Err(AppError::BadRequest(format!("Username '{}' sudah digunakan", username)));
+    }
+
+    // Check role exists
+    let role_exists = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM roles WHERE id = $1)",
+        payload.role_id
+    )
+    .fetch_one(&state.pool)
+    .await?
+    .unwrap_or(false);
+
+    if !role_exists {
+        return Err(AppError::BadRequest(format!("Role '{}' tidak valid", payload.role_id)));
+    }
+
+    let hashed_pw = hash_password(password)?;
+
+    let mut tx = state.pool.begin().await?;
+
+    let new_user_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO users (username, password_hash, full_name, role_id, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
+        RETURNING id
+        "#,
+        username,
+        hashed_pw,
+        full_name,
+        payload.role_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // Assign warehouses
+    for wh_id in &payload.warehouse_ids {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_warehouses (user_id, warehouse_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+            new_user_id,
+            wh_id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // Audit log
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'CREATE_USER', 'USER', $3, $4)
+        "#,
+        user.sub,
+        user.username,
+        new_user_id.to_string(),
+        json!({
+            "created_username": username,
+            "full_name": full_name,
+            "role_id": payload.role_id,
+            "warehouse_ids": payload.warehouse_ids
+        })
+    )
+    .execute(&mut *tx)
+    .await;
+
+    tx.commit().await?;
+
+    Ok(Json(json!({
+        "success": true,
+        "user_id": new_user_id,
+        "message": format!("Pengguna '{}' berhasil dibuat", username)
+    })))
+}
+
+pub async fn update_user(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateUserRequest>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "users.manage").await?;
+
+    let mut tx = state.pool.begin().await?;
+
+    let existing = sqlx::query!(
+        "SELECT id, username FROM users WHERE id = $1 FOR UPDATE",
+        id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Pengguna tidak ditemukan".to_string()))?;
+
+    if let Some(ref fn_val) = payload.full_name {
+        let trimmed = fn_val.trim();
+        if !trimmed.is_empty() {
+            sqlx::query!(
+                "UPDATE users SET full_name = $1, updated_at = NOW() WHERE id = $2",
+                trimmed,
+                id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    if let Some(ref r_id) = payload.role_id {
+        sqlx::query!(
+            "UPDATE users SET role_id = $1, updated_at = NOW() WHERE id = $2",
+            r_id,
+            id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    if let Some(active) = payload.is_active {
+        sqlx::query!(
+            "UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2",
+            active,
+            id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    if let Some(ref pw) = payload.password {
+        let trimmed_pw = pw.trim();
+        if trimmed_pw.len() >= 6 {
+            let hashed = hash_password(trimmed_pw)?;
+            sqlx::query!(
+                "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+                hashed,
+                id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    if let Some(ref wh_ids) = payload.warehouse_ids {
+        sqlx::query!("DELETE FROM user_warehouses WHERE user_id = $1", id)
+            .execute(&mut *tx)
+            .await?;
+
+        for wh_id in wh_ids {
+            sqlx::query!(
+                "INSERT INTO user_warehouses (user_id, warehouse_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                id,
+                wh_id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    // Audit log
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'UPDATE_USER', 'USER', $3, $4)
+        "#,
+        user.sub,
+        user.username,
+        id.to_string(),
+        json!({
+            "target_username": existing.username,
+            "updated_role": payload.role_id,
+            "is_active": payload.is_active,
+            "warehouses": payload.warehouse_ids
+        })
+    )
+    .execute(&mut *tx)
+    .await;
+
+    tx.commit().await?;
+
+    Ok(Json(json!({
+        "success": true,
+        "message": format!("Data pengguna '{}' berhasil diperbarui", existing.username)
+    })))
 }

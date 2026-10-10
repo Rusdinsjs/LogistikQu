@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   Boxes,
@@ -9,6 +10,7 @@ import {
   Database,
   BarChart3,
   History,
+  Users,
 } from 'lucide-react';
 
 export type TabId =
@@ -20,7 +22,8 @@ export type TabId =
   | 'adjustment'
   | 'master'
   | 'reports'
-  | 'audit';
+  | 'audit'
+  | 'users';
 
 interface SidebarProps {
   currentTab: TabId;
@@ -28,6 +31,13 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
+  const { user } = useAuth();
+
+  const canManageUsers =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.role_id === 'MANAGER' ||
+    user?.permissions.includes('users.manage');
+
   const menuItems: Array<{ id: TabId; label: string; icon: React.FC<{ className?: string }> }> = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Monitoring Stok', icon: Boxes },
@@ -38,6 +48,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     { id: 'master', label: 'Master Data & Unit', icon: Database },
     { id: 'reports', label: 'Laporan & Konsumsi', icon: BarChart3 },
     { id: 'audit', label: 'Jejak Audit Sistem', icon: History },
+    ...(canManageUsers
+      ? [{ id: 'users' as TabId, label: 'Manajemen Pengguna', icon: Users }]
+      : []),
   ];
 
   return (

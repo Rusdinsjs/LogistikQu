@@ -1,7 +1,9 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_permission, check_warehouse_access, AuthUser},
+        middleware::{
+            check_permission, check_warehouse_access, get_user_warehouse_ids, AuthUser,
+        },
     },
     domain::models::CreateAdjustmentRequest,
     error::AppError,
@@ -116,17 +118,21 @@ pub async fn create_adjustment(
 
 pub async fn list_adjustments(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<StockAdjustmentHeader>>, AppError> {
+    let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
+
     let items = sqlx::query_as!(
         StockAdjustmentHeader,
         r#"
         SELECT id, adjustment_number, warehouse_id, reason, notes,
                status, created_by, approved_by, approved_at, created_at
         FROM stock_adjustments
+        WHERE warehouse_id = ANY($1)
         ORDER BY created_at DESC
         LIMIT 100
-        "#
+        "#,
+        &user_whs[..]
     )
     .fetch_all(&state.pool)
     .await?;
@@ -154,6 +160,8 @@ pub async fn approve_adjustment(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::NotFound("Pengajuan penyesuaian tidak ditemukan".to_string()))?;
+
+    check_warehouse_access(&state.pool, &user, &adj.warehouse_id).await?;
 
     if adj.status != "PENDING_APPROVAL" {
         return Err(AppError::BadRequest("Pengajuan penyesuaian bukan berstatus PENDING_APPROVAL".to_string()));

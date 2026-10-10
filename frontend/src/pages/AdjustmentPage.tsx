@@ -26,7 +26,14 @@ export const AdjustmentPage: React.FC = () => {
   const [reason, setReason] = useState('Stock Opname Rutin');
   const [notes, setNotes] = useState('');
 
-  const isSupervisor = user?.role_id === 'SUPERVISOR' || user?.permissions?.includes('adjustment.approve') || false;
+  const isSupervisor =
+    user?.role_id === 'SUPERVISOR' ||
+    user?.role_id === 'SUPERVISOR_HE' ||
+    user?.role_id === 'SUPERVISOR_DT' ||
+    user?.role_id === 'MANAGER' ||
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('adjustment.approve') ||
+    false;
 
   const loadData = async () => {
     try {

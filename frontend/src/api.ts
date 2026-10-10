@@ -22,6 +22,10 @@ import type {
   UnitReport,
   UserProfile,
   WarehouseInfo,
+  UserManagementItem,
+  RoleItem,
+  CreateUserPayload,
+  UpdateUserPayload,
 } from './types';
 
 export const api = axios.create({
@@ -221,3 +225,23 @@ export const auditApi = {
     return res.data;
   },
 };
+
+export const userApi = {
+  listUsers: async () => {
+    const res = await api.get<UserManagementItem[]>('/users');
+    return res.data;
+  },
+  listRoles: async () => {
+    const res = await api.get<RoleItem[]>('/roles');
+    return res.data;
+  },
+  createUser: async (payload: CreateUserPayload) => {
+    const res = await api.post<{ success: boolean; user_id: string; message: string }>('/users', payload);
+    return res.data;
+  },
+  updateUser: async (id: string, payload: UpdateUserPayload) => {
+    const res = await api.put<{ success: boolean; message: string }>(`/users/${id}`, payload);
+    return res.data;
+  },
+};
+

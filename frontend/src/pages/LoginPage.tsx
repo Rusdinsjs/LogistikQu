@@ -12,15 +12,17 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setError(null);
     try {
-      await login(username);
+      await login(username, password);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Gagal login ke dalam sistem');
     }
   };
 
   const demoAccounts = [
-    { username: 'superadmin', role: 'Super Admin', desc: 'Akses penuh seluruh warehouse & konfigurasi' },
-    { username: 'supervisor', role: 'Supervisor Gudang Utama', desc: 'Approval replenishment, opname & part kritikal' },
+    { username: 'superadmin', role: 'Super Admin', desc: 'Akses teknis root seluruh modul & sistem' },
+    { username: 'manager', role: 'Manager Logistik', desc: 'Akses executive semua gudang, approval & manajemen user' },
+    { username: 'supervisor_he', role: 'Supervisor Alat Berat', desc: 'Khusus mengawasi & approval WH-MAIN-HE & WH-CONT-HE' },
+    { username: 'supervisor_dt', role: 'Supervisor Dump Truck', desc: 'Khusus mengawasi & approval WH-MAIN-DT & WH-CONT-DT' },
     { username: 'admin_main_he', role: 'Admin Utama Alat Berat', desc: 'Verifikasi request & supply drop kontainer HE' },
     { username: 'admin_main_dt', role: 'Admin Utama Dump Truck', desc: 'Verifikasi request & supply drop kontainer DT' },
     { username: 'admin_cont_he', role: 'Admin Kontainer Alat Berat', desc: 'POS issue, request stok, saldo kontainer HE' },

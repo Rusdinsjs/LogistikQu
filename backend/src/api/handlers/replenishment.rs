@@ -1,7 +1,7 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_permission, check_warehouse_access, AuthUser},
+        middleware::{check_permission, check_warehouse_access, get_user_warehouse_ids, AuthUser},
     },
     domain::models::{
         ApproveReplenishmentRequest, CreateReplenishmentRequest, RejectReplenishmentRequest,
@@ -186,10 +186,14 @@ pub async fn create_request(
 
 pub async fn list_requests(
     State(state): State<AppState>,
-    AuthUser(_user): AuthUser,
+    AuthUser(user): AuthUser,
     Query(query): Query<ReplenishmentFilterQuery>,
 ) -> Result<Json<Vec<ReplenishmentRequest>>, AppError> {
+    let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
     let wh_filter = query.warehouse_id.unwrap_or_default();
+    if !wh_filter.is_empty() {
+        check_warehouse_access(&state.pool, &user, &wh_filter).await?;
+    }
     let status_filter = query.status.unwrap_or_default();
 
     let items = sqlx::query_as!(
@@ -202,11 +206,13 @@ pub async fn list_requests(
                created_at, updated_at
         FROM replenishment_requests
         WHERE ($1 = '' OR container_warehouse_id = $1 OR main_warehouse_id = $1)
-          AND ($2 = '' OR status = $2)
+          AND (container_warehouse_id = ANY($2) OR main_warehouse_id = ANY($2))
+          AND ($3 = '' OR status = $3)
         ORDER BY created_at DESC
         LIMIT 100
         "#,
         wh_filter,
+        &user_whs[..],
         status_filter
     )
     .fetch_all(&state.pool)
@@ -217,7 +223,7 @@ pub async fn list_requests(
 
 pub async fn get_request_detail(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
     let req = sqlx::query_as!(
@@ -236,6 +242,14 @@ pub async fn get_request_detail(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| AppError::NotFound("Permohonan replenishment tidak ditemukan".to_string()))?;
+
+    // Check user warehouse access
+    let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
+    if !user_whs.contains(&req.container_warehouse_id) && !user_whs.contains(&req.main_warehouse_id) {
+        return Err(AppError::Forbidden(
+            "Anda tidak memiliki izin akses ke permohonan gudang ini".to_string(),
+        ));
+    }
 
     let items = sqlx::query_as!(
         ReplenishmentItemDetail,
@@ -272,7 +286,7 @@ pub async fn verify_request(
 
     let req = sqlx::query!(
         r#"
-        SELECT id, status, request_number FROM replenishment_requests
+        SELECT id, status, request_number, main_warehouse_id FROM replenishment_requests
         WHERE id = $1 FOR UPDATE
         "#,
         id
@@ -280,6 +294,8 @@ pub async fn verify_request(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::NotFound("Permohonan tidak ditemukan".to_string()))?;
+
+    check_warehouse_access(&state.pool, &user, &req.main_warehouse_id).await?;
 
     if req.status != "REQUESTED" && req.status != "RETURNED_TO_MAIN_ADMIN" {
         return Err(AppError::BadRequest("Status permohonan tidak dapat diverifikasi".to_string()));
@@ -346,6 +362,8 @@ pub async fn approve_request(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| AppError::NotFound("Permohonan tidak ditemukan".to_string()))?;
+
+    check_warehouse_access(&state.pool, &user, &req.main_warehouse_id).await?;
 
     if req.status != "VERIFIED" {
         return Err(AppError::BadRequest("Permohonan harus berstatus VERIFIED sebelum disetujui".to_string()));
@@ -450,23 +468,35 @@ pub async fn supervisor_reject(
 ) -> Result<Json<Value>, AppError> {
     check_permission(&state.pool, &user, "request.approve").await?;
 
-    let row = sqlx::query!(
-        r#"
-        UPDATE replenishment_requests
-        SET status = 'RETURNED_TO_MAIN_ADMIN', supervisor_notes = $1, updated_at = NOW()
-        WHERE id = $2 AND status = 'VERIFIED'
-        RETURNING request_number
-        "#,
-        payload.reason,
+    let req = sqlx::query!(
+        "SELECT request_number, main_warehouse_id, status FROM replenishment_requests WHERE id = $1",
         id
     )
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| AppError::BadRequest("Permohonan tidak dapat ditolak (bukan berstatus VERIFIED)".to_string()))?;
+    .ok_or_else(|| AppError::NotFound("Permohonan tidak ditemukan".to_string()))?;
+
+    if req.status != "VERIFIED" {
+        return Err(AppError::BadRequest("Permohonan tidak dapat ditolak (bukan berstatus VERIFIED)".to_string()));
+    }
+
+    check_warehouse_access(&state.pool, &user, &req.main_warehouse_id).await?;
+
+    sqlx::query!(
+        r#"
+        UPDATE replenishment_requests
+        SET status = 'RETURNED_TO_MAIN_ADMIN', supervisor_notes = $1, updated_at = NOW()
+        WHERE id = $2
+        "#,
+        payload.reason,
+        id
+    )
+    .execute(&state.pool)
+    .await?;
 
     Ok(Json(json!({
         "success": true,
-        "message": format!("Permohonan {} ditolak Supervisor dan dikembalikan ke Admin Gudang Utama untuk revisi", row.request_number)
+        "message": format!("Permohonan {} ditolak Supervisor dan dikembalikan ke Admin Gudang Utama untuk revisi", req.request_number)
     })))
 }
 
@@ -479,23 +509,35 @@ pub async fn return_to_container(
 ) -> Result<Json<Value>, AppError> {
     check_permission(&state.pool, &user, "request.verify").await?;
 
-    let row = sqlx::query!(
-        r#"
-        UPDATE replenishment_requests
-        SET status = 'RETURNED_TO_CONTAINER_ADMIN', admin_notes = $1, updated_at = NOW()
-        WHERE id = $2 AND status IN ('REQUESTED', 'RETURNED_TO_MAIN_ADMIN')
-        RETURNING request_number
-        "#,
-        payload.reason,
+    let req = sqlx::query!(
+        "SELECT request_number, main_warehouse_id, status FROM replenishment_requests WHERE id = $1",
         id
     )
     .fetch_optional(&state.pool)
     .await?
-    .ok_or_else(|| AppError::BadRequest("Permohonan tidak dalam status yang dapat dikembalikan ke kontainer".to_string()))?;
+    .ok_or_else(|| AppError::NotFound("Permohonan tidak ditemukan".to_string()))?;
+
+    if req.status != "REQUESTED" && req.status != "RETURNED_TO_MAIN_ADMIN" {
+        return Err(AppError::BadRequest("Permohonan tidak dalam status yang dapat dikembalikan ke kontainer".to_string()));
+    }
+
+    check_warehouse_access(&state.pool, &user, &req.main_warehouse_id).await?;
+
+    sqlx::query!(
+        r#"
+        UPDATE replenishment_requests
+        SET status = 'RETURNED_TO_CONTAINER_ADMIN', admin_notes = $1, updated_at = NOW()
+        WHERE id = $2
+        "#,
+        payload.reason,
+        id
+    )
+    .execute(&state.pool)
+    .await?;
 
     Ok(Json(json!({
         "success": true,
-        "message": format!("Permohonan {} dikembalikan ke Admin Kontainer", row.request_number)
+        "message": format!("Permohonan {} dikembalikan ke Admin Kontainer", req.request_number)
     })))
 }
 

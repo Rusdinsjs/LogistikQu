@@ -43,6 +43,43 @@ pub struct LoginResponse {
     pub user: UserProfile,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserManagementItem {
+    pub id: Uuid,
+    pub username: String,
+    pub full_name: String,
+    pub role_id: String,
+    pub role_name: String,
+    pub is_active: bool,
+    pub warehouses: Vec<WarehouseInfo>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateUserRequest {
+    pub username: String,
+    pub password: String,
+    pub full_name: String,
+    pub role_id: String,
+    pub warehouse_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserRequest {
+    pub full_name: Option<String>,
+    pub role_id: Option<String>,
+    pub password: Option<String>,
+    pub is_active: Option<bool>,
+    pub warehouse_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct RoleItem {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
 // --- Master Data ---
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SparePart {

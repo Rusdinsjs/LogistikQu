@@ -233,9 +233,29 @@ export const ReplenishmentPage: React.FC = () => {
     }
   };
 
-  const isMainAdmin = user?.role_id === 'ROLE_ADMIN_UTAMA' || user?.role_id === 'ADMIN_GUDANG_UTAMA' || user?.permissions?.includes('request.verify') || false;
-  const isSupervisor = user?.role_id === 'ROLE_SUPERVISOR' || user?.role_id === 'SUPERVISOR' || user?.permissions?.includes('request.approve') || false;
-  const isContainerAdmin = user?.role_id === 'ROLE_ADMIN_KONTAINER' || user?.role_id === 'ADMIN_KONTAINER' || user?.role_name?.includes('Kontainer') || false;
+  const isMainAdmin =
+    user?.role_id === 'ROLE_ADMIN_UTAMA' ||
+    user?.role_id === 'ADMIN_MAIN' ||
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.role_id === 'MANAGER' ||
+    user?.permissions?.includes('request.verify') ||
+    false;
+
+  const isSupervisor =
+    user?.role_id === 'SUPERVISOR' ||
+    user?.role_id === 'SUPERVISOR_HE' ||
+    user?.role_id === 'SUPERVISOR_DT' ||
+    user?.role_id === 'MANAGER' ||
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('request.approve') ||
+    false;
+
+  const isContainerAdmin =
+    user?.role_id === 'ADMIN_CONTAINER' ||
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.role_id === 'MANAGER' ||
+    user?.role_name?.includes('Kontainer') ||
+    false;
 
   return (
     <div className="space-y-6">
