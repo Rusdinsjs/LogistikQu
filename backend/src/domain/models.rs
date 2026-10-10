@@ -43,6 +43,8 @@ pub struct WarehouseInfo {
     pub name: String,
     pub warehouse_type: String,
     pub category: String,
+    pub description: Option<String>,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -464,4 +466,39 @@ pub struct TransferMainReturnRequest {
 pub struct CompleteReturnRequest {
     pub final_notes: Option<String>,
     pub disposition: Option<String>,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSiteRequest {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSiteRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateWarehouseRequest {
+    pub id: Option<String>,
+    pub name: String,
+    pub warehouse_type: String,
+    pub category: String,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateWarehouseRequest {
+    pub name: Option<String>,
+    pub warehouse_type: Option<String>,
+    pub category: Option<String>,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
 }

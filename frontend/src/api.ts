@@ -103,6 +103,30 @@ export const masterApi = {
     const res = await api.put<{ success: boolean; message: string }>(`/master/spare-parts/${id}`, payload);
     return res.data;
   },
+  createSite: async (payload: { id?: string; name: string; description?: string; is_active?: boolean }) => {
+    const res = await api.post<{ success: boolean; site: Site; message: string }>('/master/sites', payload);
+    return res.data;
+  },
+  updateSite: async (id: string, payload: { name?: string; description?: string; is_active?: boolean }) => {
+    const res = await api.put<{ success: boolean; site: Site; message: string }>(`/master/sites/${id}`, payload);
+    return res.data;
+  },
+  deleteSite: async (id: string) => {
+    const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/sites/${id}`);
+    return res.data;
+  },
+  createWarehouse: async (payload: { id?: string; name: string; warehouse_type: string; category: string; description?: string; is_active?: boolean }) => {
+    const res = await api.post<{ success: boolean; warehouse: WarehouseInfo; message: string }>('/master/warehouses', payload);
+    return res.data;
+  },
+  updateWarehouse: async (id: string, payload: { name?: string; warehouse_type?: string; category?: string; description?: string; is_active?: boolean }) => {
+    const res = await api.put<{ success: boolean; warehouse: WarehouseInfo; message: string }>(`/master/warehouses/${id}`, payload);
+    return res.data;
+  },
+  deleteWarehouse: async (id: string) => {
+    const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/warehouses/${id}`);
+    return res.data;
+  },
 };
 
 export const inventoryApi = {

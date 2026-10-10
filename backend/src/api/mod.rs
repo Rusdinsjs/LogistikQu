@@ -18,8 +18,9 @@ use handlers::{
     },
     issue::{approve_critical_issue, create_issue, get_issue_detail, list_issues},
     master::{
-        create_employee, create_equipment, list_employees, list_equipment, list_sites,
-        list_spare_parts, list_warehouses, update_spare_part,
+        create_employee, create_equipment, create_site, create_warehouse, delete_site,
+        delete_warehouse, list_employees, list_equipment, list_sites, list_spare_parts,
+        list_warehouses, update_site, update_spare_part, update_warehouse,
     },
     replenishment::{
         approve_request, create_request, get_recommendations, get_request_detail, list_requests,
@@ -47,8 +48,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/master/spare-parts/{id}", put(update_spare_part))
         .route("/master/equipment", get(list_equipment).post(create_equipment))
         .route("/master/employees", get(list_employees).post(create_employee))
-        .route("/master/sites", get(list_sites))
-        .route("/master/warehouses", get(list_warehouses))
+        .route("/master/sites", get(list_sites).post(create_site))
+        .route("/master/sites/{id}", put(update_site).delete(delete_site))
+        .route("/master/warehouses", get(list_warehouses).post(create_warehouse))
+        .route("/master/warehouses/{id}", put(update_warehouse).delete(delete_warehouse))
         // Inventory
         .route("/inventory/stock", get(list_inventory_stock))
         .route("/inventory/stock/{warehouse_id}/{spare_part_id}/movements", get(get_stock_movements))
