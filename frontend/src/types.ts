@@ -3,9 +3,18 @@ export interface WarehouseInfo {
   name: string;
   warehouse_name?: string;
   warehouse_type: 'MAIN' | 'CONTAINER';
-  category: 'HEAVY_EQUIPMENT' | 'DUMP_TRUCK' | 'GENERAL' | string;
+  category: string;
   description?: string;
   is_active?: boolean;
+  parent_warehouse_id?: string | null;
+}
+
+export interface WarehouseCategory {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at?: string;
 }
 
 export interface UserProfile {

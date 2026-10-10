@@ -45,6 +45,7 @@ pub struct WarehouseInfo {
     pub category: String,
     pub description: Option<String>,
     pub is_active: bool,
+    pub parent_warehouse_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -492,6 +493,7 @@ pub struct CreateWarehouseRequest {
     pub category: String,
     pub description: Option<String>,
     pub is_active: Option<bool>,
+    pub parent_warehouse_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -499,6 +501,31 @@ pub struct UpdateWarehouseRequest {
     pub name: Option<String>,
     pub warehouse_type: Option<String>,
     pub category: Option<String>,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+    pub parent_warehouse_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct WarehouseCategory {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateWarehouseCategoryRequest {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateWarehouseCategoryRequest {
+    pub name: Option<String>,
     pub description: Option<String>,
     pub is_active: Option<bool>,
 }

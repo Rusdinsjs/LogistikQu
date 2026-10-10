@@ -69,8 +69,7 @@ pub async fn login(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active
-
+        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -156,8 +155,7 @@ pub async fn get_me(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active
-
+        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -335,8 +333,7 @@ pub async fn update_my_profile(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active
-
+        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -446,8 +443,7 @@ pub async fn list_users(
         let whs = sqlx::query_as!(
             WarehouseInfo,
             r#"
-            SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active
-
+            SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
             FROM warehouses w
             INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
             WHERE uw.user_id = $1

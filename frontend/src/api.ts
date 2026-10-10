@@ -25,6 +25,7 @@ import type {
   UnitReport,
   UserProfile,
   WarehouseInfo,
+  WarehouseCategory,
   UserManagementItem,
   RoleItem,
   CreateUserPayload,
@@ -118,16 +119,32 @@ export const masterApi = {
     const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/sites/${id}`);
     return res.data;
   },
-  createWarehouse: async (payload: { id?: string; name: string; warehouse_type: string; category: string; description?: string; is_active?: boolean }) => {
+  createWarehouse: async (payload: { id?: string; name: string; warehouse_type: string; category: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null }) => {
     const res = await api.post<{ success: boolean; warehouse: WarehouseInfo; message: string }>('/master/warehouses', payload);
     return res.data;
   },
-  updateWarehouse: async (id: string, payload: { name?: string; warehouse_type?: string; category?: string; description?: string; is_active?: boolean }) => {
+  updateWarehouse: async (id: string, payload: { name?: string; warehouse_type?: string; category?: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null }) => {
     const res = await api.put<{ success: boolean; warehouse: WarehouseInfo; message: string }>(`/master/warehouses/${id}`, payload);
     return res.data;
   },
   deleteWarehouse: async (id: string) => {
     const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/warehouses/${id}`);
+    return res.data;
+  },
+  listWarehouseCategories: async () => {
+    const res = await api.get<WarehouseCategory[]>('/master/warehouse-categories');
+    return res.data;
+  },
+  createWarehouseCategory: async (payload: { id?: string; name: string; description?: string; is_active?: boolean }) => {
+    const res = await api.post<{ success: boolean; category: WarehouseCategory; message: string }>('/master/warehouse-categories', payload);
+    return res.data;
+  },
+  updateWarehouseCategory: async (id: string, payload: { name?: string; description?: string; is_active?: boolean }) => {
+    const res = await api.put<{ success: boolean; category: WarehouseCategory; message: string }>(`/master/warehouse-categories/${id}`, payload);
+    return res.data;
+  },
+  deleteWarehouseCategory: async (id: string) => {
+    const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/warehouse-categories/${id}`);
     return res.data;
   },
 };

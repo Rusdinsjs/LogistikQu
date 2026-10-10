@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { masterApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import type { SparePart, Equipment, Employee, Site, WarehouseInfo } from '../types';
+import type { SparePart, Equipment, Employee, Site, WarehouseInfo, WarehouseCategory } from '../types';
 import {
   Boxes,
   Truck,
@@ -20,6 +20,8 @@ import {
   Power,
   PowerOff,
   Info,
+  Tag,
+  GitBranch,
 } from 'lucide-react';
 
 export const MasterPage: React.FC = () => {
@@ -74,10 +76,30 @@ export const MasterPage: React.FC = () => {
   const [warehouseFormId, setWarehouseFormId] = useState('');
   const [warehouseFormName, setWarehouseFormName] = useState('');
   const [warehouseFormType, setWarehouseFormType] = useState<'MAIN' | 'CONTAINER'>('CONTAINER');
-  const [warehouseFormCategory, setWarehouseFormCategory] = useState<'HEAVY_EQUIPMENT' | 'DUMP_TRUCK' | 'GENERAL'>('HEAVY_EQUIPMENT');
+  const [warehouseFormCategory, setWarehouseFormCategory] = useState<string>('HEAVY_EQUIPMENT');
+  const [warehouseFormParentId, setWarehouseFormParentId] = useState<string>('');
   const [warehouseFormDesc, setWarehouseFormDesc] = useState('');
   const [warehouseFormActive, setWarehouseFormActive] = useState(true);
   const [savingWarehouse, setSavingWarehouse] = useState(false);
+
+  // Warehouse Categories Master State
+  const [warehouseCategories, setWarehouseCategories] = useState<WarehouseCategory[]>([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [catEditMode, setCatEditMode] = useState<'create' | 'edit'>('create');
+  const [catFormId, setCatFormId] = useState('');
+  const [catFormName, setCatFormName] = useState('');
+  const [catFormDesc, setCatFormDesc] = useState('');
+  const [catFormActive, setCatFormActive] = useState(true);
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  const loadCategories = async () => {
+    try {
+      const cats = await masterApi.listWarehouseCategories();
+      setWarehouseCategories(cats);
+    } catch (err) {
+      console.error('Failed to load warehouse categories:', err);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -95,8 +117,12 @@ export const MasterPage: React.FC = () => {
         const data = await masterApi.getSites();
         setSites(data);
       } else if (activeTab === 'warehouses') {
-        const data = await masterApi.getWarehouses();
-        setWarehouses(data);
+        const [whData, catData] = await Promise.all([
+          masterApi.getWarehouses(),
+          masterApi.listWarehouseCategories(),
+        ]);
+        setWarehouses(whData);
+        setWarehouseCategories(catData);
       }
     } catch (err) {
       console.error(err);
@@ -107,6 +133,7 @@ export const MasterPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    loadCategories();
   }, [activeTab, search]);
 
   const handleToggleCoreReturn = async (part: SparePart) => {
@@ -289,7 +316,9 @@ export const MasterPage: React.FC = () => {
     setWarehouseFormId('');
     setWarehouseFormName('');
     setWarehouseFormType('CONTAINER');
-    setWarehouseFormCategory('HEAVY_EQUIPMENT');
+    setWarehouseFormCategory(warehouseCategories[0]?.id || 'HEAVY_EQUIPMENT');
+    const defaultParent = warehouses.find((w) => w.warehouse_type === 'MAIN')?.id || '';
+    setWarehouseFormParentId(defaultParent);
     setWarehouseFormDesc('');
     setWarehouseFormActive(true);
     setShowWarehouseModal(true);
@@ -300,7 +329,8 @@ export const MasterPage: React.FC = () => {
     setWarehouseFormId(wh.id);
     setWarehouseFormName(wh.name);
     setWarehouseFormType(wh.warehouse_type);
-    setWarehouseFormCategory((wh.category as any) || 'HEAVY_EQUIPMENT');
+    setWarehouseFormCategory(wh.category || warehouseCategories[0]?.id || 'HEAVY_EQUIPMENT');
+    setWarehouseFormParentId(wh.parent_warehouse_id || '');
     setWarehouseFormDesc(wh.description || '');
     setWarehouseFormActive(wh.is_active ?? true);
     setShowWarehouseModal(true);
@@ -315,12 +345,14 @@ export const MasterPage: React.FC = () => {
 
     setSavingWarehouse(true);
     try {
+      const parentId = warehouseFormType === 'CONTAINER' ? (warehouseFormParentId.trim() || null) : null;
       if (warehouseModalMode === 'create') {
         const res = await masterApi.createWarehouse({
           id: warehouseFormId.trim() || undefined,
           name: warehouseFormName.trim(),
           warehouse_type: warehouseFormType,
           category: warehouseFormCategory,
+          parent_warehouse_id: parentId,
           description: warehouseFormDesc.trim() || undefined,
           is_active: warehouseFormActive,
         });
@@ -330,6 +362,7 @@ export const MasterPage: React.FC = () => {
           name: warehouseFormName.trim(),
           warehouse_type: warehouseFormType,
           category: warehouseFormCategory,
+          parent_warehouse_id: parentId,
           description: warehouseFormDesc.trim() || undefined,
           is_active: warehouseFormActive,
         });
@@ -341,6 +374,69 @@ export const MasterPage: React.FC = () => {
       alert(err?.response?.data?.error || 'Gagal menyimpan Gudang');
     } finally {
       setSavingWarehouse(false);
+    }
+  };
+
+  // --- WAREHOUSE CATEGORY CRUD HANDLERS ---
+  const handleOpenCreateCategory = () => {
+    setCatEditMode('create');
+    setCatFormId('');
+    setCatFormName('');
+    setCatFormDesc('');
+    setCatFormActive(true);
+  };
+
+  const handleOpenEditCategory = (cat: WarehouseCategory) => {
+    setCatEditMode('edit');
+    setCatFormId(cat.id);
+    setCatFormName(cat.name);
+    setCatFormDesc(cat.description || '');
+    setCatFormActive(cat.is_active);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catFormName.trim()) {
+      alert('Nama Kategori wajib diisi!');
+      return;
+    }
+    setSavingCategory(true);
+    try {
+      if (catEditMode === 'create') {
+        const res = await masterApi.createWarehouseCategory({
+          id: catFormId.trim() || undefined,
+          name: catFormName.trim(),
+          description: catFormDesc.trim() || undefined,
+          is_active: catFormActive,
+        });
+        alert(res.message || 'Kategori gudang berhasil disimpan');
+      } else {
+        const res = await masterApi.updateWarehouseCategory(catFormId, {
+          name: catFormName.trim(),
+          description: catFormDesc.trim() || undefined,
+          is_active: catFormActive,
+        });
+        alert(res.message || 'Kategori gudang berhasil diperbarui');
+      }
+      handleOpenCreateCategory();
+      loadCategories();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menyimpan kategori');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleDeleteCategory = async (cat: WarehouseCategory) => {
+    if (!window.confirm(`Hapus kategori "${cat.name}"? Jika masih ada gudang yang menggunakannya, kategori akan dinonaktifkan (soft delete).`)) {
+      return;
+    }
+    try {
+      const res = await masterApi.deleteWarehouseCategory(cat.id);
+      alert(res.message || 'Kategori berhasil dihapus');
+      loadCategories();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menghapus kategori');
     }
   };
 
@@ -509,13 +605,28 @@ export const MasterPage: React.FC = () => {
           )}
 
           {activeTab === 'warehouses' && canManageMaster && (
-            <button
-              onClick={openCreateWarehouseModal}
-              className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Tambah Gudang Baru</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleOpenCreateCategory();
+                  setShowCategoryModal(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                title="Buka Master Kategori Gudang untuk Tambah / Edit Kategori"
+              >
+                <Tag className="w-3.5 h-3.5" />
+                <span>Kategori Gudang ({warehouseCategories.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={openCreateWarehouseModal}
+                className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Tambah Gudang Baru</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -856,14 +967,16 @@ export const MasterPage: React.FC = () => {
                               : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
                           }`}
                         >
-                          {wh.warehouse_type === 'MAIN' ? '🏢 GUDANG UTAMA' : '📦 GUDANG KONTAINER'}
+                          {wh.warehouse_type === 'MAIN' ? '🏢 GUDANG INDUK' : '📦 GUDANG SUB (KONTAINER)'}
                         </span>
+                        {wh.parent_warehouse_id && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                            <GitBranch className="w-3 h-3" />
+                            <span>Induk: {warehouses.find((p) => p.id === wh.parent_warehouse_id)?.name || wh.parent_warehouse_id}</span>
+                          </span>
+                        )}
                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-                          {wh.category === 'HEAVY_EQUIPMENT'
-                            ? 'Alat Berat'
-                            : wh.category === 'DUMP_TRUCK'
-                            ? 'Dump Truck'
-                            : wh.category}
+                          {warehouseCategories.find((c) => c.id === wh.category)?.name || wh.category}
                         </span>
                       </div>
                       <h3 className="text-base font-bold text-slate-100 mt-2">{wh.name}</h3>
@@ -1256,30 +1369,71 @@ export const MasterPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-400 mb-1">Tipe Gudang *</label>
+                  <label className="block text-slate-400 mb-1">Tingkat / Tipe Gudang *</label>
                   <select
                     value={warehouseFormType}
                     onChange={(e) => setWarehouseFormType(e.target.value as any)}
                     className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
                   >
-                    <option value="CONTAINER">Gudang Kontainer</option>
-                    <option value="MAIN">Gudang Utama</option>
+                    <option value="CONTAINER">📦 Gudang Sub (Kontainer Lapangan)</option>
+                    <option value="MAIN">🏢 Gudang Induk (Pusat / Main Hub)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1">Kategori Armada *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-slate-400">Kategori Gudang *</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleOpenCreateCategory();
+                        setShowCategoryModal(true);
+                      }}
+                      className="text-[10px] text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
+                    >
+                      <Tag className="w-2.5 h-2.5" />
+                      <span>+ Kelola</span>
+                    </button>
+                  </div>
                   <select
                     value={warehouseFormCategory}
-                    onChange={(e) => setWarehouseFormCategory(e.target.value as any)}
+                    onChange={(e) => setWarehouseFormCategory(e.target.value)}
                     className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
                   >
-                    <option value="HEAVY_EQUIPMENT">Alat Berat (Heavy Equipment)</option>
-                    <option value="DUMP_TRUCK">Dump Truck</option>
-                    <option value="GENERAL">Umum / Fasilitas Penunjang</option>
+                    {warehouseCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name} {!cat.is_active ? '(Non-Aktif)' : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
+
+              {warehouseFormType === 'CONTAINER' && (
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-indigo-500/30 space-y-1">
+                  <label className="block text-indigo-300 font-semibold mb-1 flex items-center gap-1.5">
+                    <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Gudang Induk Acuan (Tempat Menginduk / Suplai) *</span>
+                  </label>
+                  <select
+                    value={warehouseFormParentId}
+                    onChange={(e) => setWarehouseFormParentId(e.target.value)}
+                    className="w-full px-2.5 py-2 bg-slate-900 border border-indigo-500/40 rounded-lg text-slate-100 focus:border-indigo-400 focus:outline-none"
+                  >
+                    <option value="">-- Pilih Gudang Induk Penyuplai --</option>
+                    {warehouses
+                      .filter((w) => w.warehouse_type === 'MAIN')
+                      .map((mw) => (
+                        <option key={mw.id} value={mw.id}>
+                          {mw.id} — {mw.name} ({warehouseCategories.find((c) => c.id === mw.category)?.name || mw.category})
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400 italic">
+                    Gudang Sub (Kontainer Lapangan) akan otomatis mengajukan permohonan stok & STO ke Gudang Induk penyuplai ini.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-400 mb-1">Deskripsi / Keterangan</label>
@@ -1322,6 +1476,173 @@ export const MasterPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KELOLA MASTER KATEGORI GUDANG */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-2xl rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Tag className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">Master Kategori Gudang Logistik</h3>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  {warehouseCategories.length} Kategori
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCategoryModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-hidden flex-1">
+              {/* Form Tambah/Edit Kategori (2 kolom) */}
+              <div className="md:col-span-2 p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-3">
+                <h4 className="text-xs font-bold text-cyan-400 flex items-center justify-between">
+                  <span>{catEditMode === 'create' ? '+ Tambah Kategori' : 'Edit Kategori'}</span>
+                  {catEditMode === 'edit' && (
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateCategory}
+                      className="text-[10px] text-slate-400 hover:text-white underline font-normal"
+                    >
+                      Batal Edit
+                    </button>
+                  )}
+                </h4>
+
+                <form onSubmit={handleSaveCategory} className="space-y-2.5 text-xs">
+                  <div>
+                    <label className="block text-slate-400 mb-1">
+                      ID Kategori {catEditMode === 'create' ? '(Opsional)' : '(ID Permanen)'}
+                    </label>
+                    <input
+                      type="text"
+                      disabled={catEditMode === 'edit'}
+                      placeholder="e.g. DRILLING / FIXED_PLANT"
+                      value={catFormId}
+                      onChange={(e) => setCatFormId(e.target.value.toUpperCase())}
+                      className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono uppercase focus:border-cyan-500 focus:outline-none disabled:opacity-60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Nama Kategori *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Drilling & Exploration Fleet"
+                      value={catFormName}
+                      onChange={(e) => setCatFormName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 mb-1">Keterangan / Cakupan</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Suku cadang peralatan pengeboran dan eksplorasi..."
+                      value={catFormDesc}
+                      onChange={(e) => setCatFormDesc(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="cat_active_checkbox"
+                      checked={catFormActive}
+                      onChange={(e) => setCatFormActive(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-700 text-cyan-500 focus:ring-0"
+                    />
+                    <label htmlFor="cat_active_checkbox" className="text-slate-300 cursor-pointer text-[11px]">
+                      Kategori Aktif
+                    </label>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingCategory}
+                      className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs disabled:opacity-50"
+                    >
+                      {savingCategory ? 'Menyimpan...' : catEditMode === 'create' ? '+ Simpan Kategori' : 'Perbarui Kategori'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Daftar Kategori (3 kolom) */}
+              <div className="md:col-span-3 space-y-2 overflow-y-auto max-h-[50vh] pr-1">
+                <h4 className="text-xs font-semibold text-slate-400 sticky top-0 bg-slate-950/80 py-1">
+                  Daftar Kategori Terdaftar
+                </h4>
+                {warehouseCategories.map((cat) => (
+                  <div
+                    key={cat.id}
+                    className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-start justify-between gap-2 hover:border-slate-700 transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[10px] text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-800/40">
+                          {cat.id}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                            cat.is_active
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {cat.is_active ? 'Aktif' : 'Non-Aktif'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-200">{cat.name}</p>
+                      {cat.description && (
+                        <p className="text-[11px] text-slate-400 line-clamp-2">{cat.description}</p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditCategory(cat)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                        title="Edit Kategori"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition"
+                        title="Hapus / Nonaktifkan Kategori"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCategoryModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

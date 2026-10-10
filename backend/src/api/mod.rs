@@ -19,9 +19,10 @@ use handlers::{
     },
     issue::{approve_critical_issue, create_issue, get_issue_detail, list_issues},
     master::{
-        create_employee, create_equipment, create_site, create_warehouse, delete_site,
-        delete_warehouse, list_employees, list_equipment, list_sites, list_spare_parts,
-        list_warehouses, update_site, update_spare_part, update_warehouse,
+        create_employee, create_equipment, create_site, create_warehouse, create_warehouse_category,
+        delete_site, delete_warehouse, delete_warehouse_category, list_employees, list_equipment,
+        list_sites, list_spare_parts, list_warehouse_categories, list_warehouses, update_site,
+        update_spare_part, update_warehouse, update_warehouse_category,
     },
     replenishment::{
         approve_request, create_request, get_recommendations, get_request_detail, list_requests,
@@ -53,6 +54,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/master/sites/{id}", put(update_site).delete(delete_site))
         .route("/master/warehouses", get(list_warehouses).post(create_warehouse))
         .route("/master/warehouses/{id}", put(update_warehouse).delete(delete_warehouse))
+        .route("/master/warehouse-categories", get(list_warehouse_categories).post(create_warehouse_category))
+        .route("/master/warehouse-categories/{id}", put(update_warehouse_category).delete(delete_warehouse_category))
         // Warehouse Bins & Container Racks
         .route("/warehouses/{warehouse_id}/bins", get(list_warehouse_bins).post(create_warehouse_bin))
         .route("/warehouses/{warehouse_id}/bins/{bin_id}", put(update_warehouse_bin).delete(delete_warehouse_bin))

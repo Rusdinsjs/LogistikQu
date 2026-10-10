@@ -7,6 +7,7 @@ use crate::{
         CreateEmployeeRequest, CreateEquipmentRequest, CreateSiteRequest, CreateWarehouseRequest,
         Employee, Equipment, Site, SparePart, UpdateSiteRequest, UpdateSparePartRequest,
         UpdateWarehouseRequest, WarehouseInfo,
+        WarehouseCategory, CreateWarehouseCategoryRequest, UpdateWarehouseCategoryRequest,
     },
     error::AppError,
 };
@@ -122,7 +123,7 @@ pub async fn list_warehouses(
     let items = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT id, name, warehouse_type, category, description, is_active
+        SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id
         FROM warehouses
         ORDER BY id
         "#
@@ -542,26 +543,33 @@ pub async fn create_warehouse(
     });
 
     let is_active = payload.is_active.unwrap_or(true);
+    let parent_id = if wh_type == "CONTAINER" {
+        payload.parent_warehouse_id
+    } else {
+        None
+    };
 
     let row = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        INSERT INTO warehouses (id, name, warehouse_type, category, description, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO warehouses (id, name, warehouse_type, category, description, is_active, parent_warehouse_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             warehouse_type = EXCLUDED.warehouse_type,
             category = EXCLUDED.category,
             description = EXCLUDED.description,
-            is_active = EXCLUDED.is_active
-        RETURNING id, name, warehouse_type, category, description, is_active
+            is_active = EXCLUDED.is_active,
+            parent_warehouse_id = EXCLUDED.parent_warehouse_id
+        RETURNING id, name, warehouse_type, category, description, is_active, parent_warehouse_id
         "#,
         id,
         name,
         wh_type,
         category,
         payload.description,
-        is_active
+        is_active,
+        parent_id
     )
     .fetch_one(&state.pool)
     .await?;
@@ -592,7 +600,8 @@ pub async fn create_warehouse(
             "warehouse_type": row.warehouse_type,
             "category": row.category,
             "description": row.description,
-            "is_active": row.is_active
+            "is_active": row.is_active,
+            "parent_warehouse_id": row.parent_warehouse_id
         })
     )
     .execute(&state.pool)
@@ -615,7 +624,7 @@ pub async fn update_warehouse(
 
     let existing = sqlx::query_as!(
         WarehouseInfo,
-        "SELECT id, name, warehouse_type, category, description, is_active FROM warehouses WHERE id = $1",
+        "SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id FROM warehouses WHERE id = $1",
         id
     )
     .fetch_optional(&state.pool)
@@ -627,20 +636,26 @@ pub async fn update_warehouse(
     let category = payload.category.map(|s| s.trim().to_uppercase()).unwrap_or(existing.category);
     let description = payload.description.or(existing.description);
     let is_active = payload.is_active.unwrap_or(existing.is_active);
+    let parent_id = if wh_type == "CONTAINER" {
+        payload.parent_warehouse_id.or(existing.parent_warehouse_id)
+    } else {
+        None
+    };
 
     let updated = sqlx::query_as!(
         WarehouseInfo,
         r#"
         UPDATE warehouses
-        SET name = $1, warehouse_type = $2, category = $3, description = $4, is_active = $5
-        WHERE id = $6
-        RETURNING id, name, warehouse_type, category, description, is_active
+        SET name = $1, warehouse_type = $2, category = $3, description = $4, is_active = $5, parent_warehouse_id = $6
+        WHERE id = $7
+        RETURNING id, name, warehouse_type, category, description, is_active, parent_warehouse_id
         "#,
         name,
         wh_type,
         category,
         description,
         is_active,
+        parent_id,
         id
     )
     .fetch_one(&state.pool)
@@ -659,7 +674,8 @@ pub async fn update_warehouse(
             "warehouse_type": updated.warehouse_type,
             "category": updated.category,
             "description": updated.description,
-            "is_active": updated.is_active
+            "is_active": updated.is_active,
+            "parent_warehouse_id": updated.parent_warehouse_id
         })
     )
     .execute(&state.pool)
@@ -681,7 +697,7 @@ pub async fn delete_warehouse(
 
     let existing = sqlx::query_as!(
         WarehouseInfo,
-        "SELECT id, name, warehouse_type, category, description, is_active FROM warehouses WHERE id = $1",
+        "SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id FROM warehouses WHERE id = $1",
         id
     )
     .fetch_optional(&state.pool)
@@ -751,5 +767,217 @@ pub async fn delete_warehouse(
         "success": true,
         "is_soft_deleted": false,
         "message": format!("Gudang {} berhasil dihapus permanen", existing.name)
+    })))
+}
+
+// ==============================================================================
+// MASTER KATEGORI GUDANG (WAREHOUSE CATEGORIES CRUD)
+// ==============================================================================
+
+pub async fn list_warehouse_categories(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> Result<Json<Vec<WarehouseCategory>>, AppError> {
+    let items = sqlx::query_as!(
+        WarehouseCategory,
+        r#"
+        SELECT id, name, description, is_active, created_at
+        FROM warehouse_categories
+        ORDER BY name
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok(Json(items))
+}
+
+pub async fn create_warehouse_category(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<CreateWarehouseCategoryRequest>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+
+    let name = payload.name.trim();
+    if name.is_empty() {
+        return Err(AppError::BadRequest("Nama kategori gudang wajib diisi".to_string()));
+    }
+
+    let id = payload.id.map(|s| s.trim().to_uppercase()).filter(|s| !s.is_empty()).unwrap_or_else(|| {
+        name.to_uppercase().replace(|c: char| !c.is_alphanumeric(), "_")
+    });
+
+    let is_active = payload.is_active.unwrap_or(true);
+
+    let row = sqlx::query_as!(
+        WarehouseCategory,
+        r#"
+        INSERT INTO warehouse_categories (id, name, description, is_active)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            is_active = EXCLUDED.is_active
+        RETURNING id, name, description, is_active, created_at
+        "#,
+        id,
+        name,
+        payload.description,
+        is_active
+    )
+    .fetch_one(&state.pool)
+    .await?;
+
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'CREATE_WAREHOUSE_CATEGORY', 'WAREHOUSE_CATEGORY', $3, $4)
+        "#,
+        user.sub,
+        user.username,
+        row.id,
+        json!({
+            "name": row.name,
+            "description": row.description,
+            "is_active": row.is_active
+        })
+    )
+    .execute(&state.pool)
+    .await;
+
+    Ok(Json(json!({
+        "success": true,
+        "category": row,
+        "message": format!("Kategori gudang '{}' berhasil disimpan", row.name)
+    })))
+}
+
+pub async fn update_warehouse_category(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateWarehouseCategoryRequest>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+
+    let existing = sqlx::query_as!(
+        WarehouseCategory,
+        "SELECT id, name, description, is_active, created_at FROM warehouse_categories WHERE id = $1",
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("Kategori gudang '{}' tidak ditemukan", id)))?;
+
+    let name = payload.name.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or(existing.name);
+    let description = payload.description.or(existing.description);
+    let is_active = payload.is_active.unwrap_or(existing.is_active);
+
+    let updated = sqlx::query_as!(
+        WarehouseCategory,
+        r#"
+        UPDATE warehouse_categories
+        SET name = $1, description = $2, is_active = $3
+        WHERE id = $4
+        RETURNING id, name, description, is_active, created_at
+        "#,
+        name,
+        description,
+        is_active,
+        id
+    )
+    .fetch_one(&state.pool)
+    .await?;
+
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'UPDATE_WAREHOUSE_CATEGORY', 'WAREHOUSE_CATEGORY', $3, $4)
+        "#,
+        user.sub,
+        user.username,
+        id,
+        json!({
+            "name": updated.name,
+            "description": updated.description,
+            "is_active": updated.is_active
+        })
+    )
+    .execute(&state.pool)
+    .await;
+
+    Ok(Json(json!({
+        "success": true,
+        "category": updated,
+        "message": format!("Kategori gudang '{}' berhasil diperbarui", updated.name)
+    })))
+}
+
+pub async fn delete_warehouse_category(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+
+    let existing = sqlx::query_as!(
+        WarehouseCategory,
+        "SELECT id, name, description, is_active, created_at FROM warehouse_categories WHERE id = $1",
+        id
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("Kategori gudang '{}' tidak ditemukan", id)))?;
+
+    let is_referenced = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM warehouses WHERE category = $1)", id)
+        .fetch_one(&state.pool).await?.unwrap_or(false);
+
+    if is_referenced {
+        sqlx::query!("UPDATE warehouse_categories SET is_active = FALSE WHERE id = $1", id)
+            .execute(&state.pool)
+            .await?;
+
+        let _ = sqlx::query!(
+            r#"
+            INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+            VALUES ($1, $2, 'DEACTIVATE_WAREHOUSE_CATEGORY', 'WAREHOUSE_CATEGORY', $3, $4)
+            "#,
+            user.sub,
+            user.username,
+            id,
+            json!({"reason": "referenced by warehouses", "is_active": false})
+        )
+        .execute(&state.pool)
+        .await;
+
+        return Ok(Json(json!({
+            "success": true,
+            "is_soft_deleted": true,
+            "message": format!("Kategori '{}' sedang digunakan oleh gudang sehingga dinonaktifkan (soft delete)", existing.name)
+        })));
+    }
+
+    sqlx::query!("DELETE FROM warehouse_categories WHERE id = $1", id)
+        .execute(&state.pool)
+        .await?;
+
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'DELETE_WAREHOUSE_CATEGORY', 'WAREHOUSE_CATEGORY', $3, $4)
+        "#,
+        user.sub,
+        user.username,
+        id,
+        json!({"name": existing.name})
+    )
+    .execute(&state.pool)
+    .await;
+
+    Ok(Json(json!({
+        "success": true,
+        "is_soft_deleted": false,
+        "message": format!("Kategori gudang '{}' berhasil dihapus permanen", existing.name)
     })))
 }
