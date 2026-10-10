@@ -58,7 +58,7 @@ pub async fn list_returns(
         LEFT JOIN users um ON r.main_received_by = um.id
         WHERE ($1 = '' OR r.warehouse_id = $1)
           AND ($2 = '' OR r.status = $2)
-          AND ($3 = '' OR r.return_number ILIKE $4 OR r.unit_number ILIKE $4 OR r.mechanic_name ILIKE $4 OR p.part_name ILIKE $4 OR r.spare_part_id ILIKE $4)
+          AND ($3 = '' OR r.return_number ILIKE $4 OR r.unit_number ILIKE $4 OR r.mechanic_name ILIKE $4 OR p.part_name ILIKE $4 OR r.spare_part_id ILIKE $4 OR r.current_holder_name ILIKE $4)
         ORDER BY r.created_at DESC
         LIMIT 150
         "#,

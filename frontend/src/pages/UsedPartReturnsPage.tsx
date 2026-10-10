@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { returnsApi, masterApi } from '../api';
 import type { UsedPartReturn, WarehouseInfo } from '../types';
@@ -18,6 +18,10 @@ import {
   RefreshCw,
   Archive,
   FileCheck,
+  UserCheck,
+  Users,
+  Filter,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const UsedPartReturnsPage: React.FC = () => {
@@ -28,6 +32,11 @@ export const UsedPartReturnsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterWarehouse, setFilterWarehouse] = useState<string>('');
   const [warehouseList, setWarehouseList] = useState<WarehouseInfo[]>([]);
+
+  // Filter Penanggung Jawab (PJ)
+  const [selectedHolderType, setSelectedHolderType] = useState<string>('ALL');
+  const [selectedHolderName, setSelectedHolderName] = useState<string>('');
+  const [showHolderSummaryModal, setShowHolderSummaryModal] = useState(false);
 
   // Modals for actions
   const [selectedReturn, setSelectedReturn] = useState<UsedPartReturn | null>(null);
@@ -189,11 +198,63 @@ export const UsedPartReturnsPage: React.FC = () => {
     }
   };
 
-  // Group returns by status
-  const pendingMechanic = returns.filter((r) => r.status === 'PENDING_RETURN');
-  const atContainer = returns.filter((r) => r.status === 'RECEIVED_AT_CONTAINER');
-  const atMain = returns.filter((r) => r.status === 'TRANSFERRED_TO_MAIN');
-  const completed = returns.filter((r) => r.status === 'COMPLETED');
+  // Rekapitulasi per Penanggung Jawab (PJ)
+  const holderSummary = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        type: string;
+        count: number;
+        items: UsedPartReturn[];
+      }
+    >();
+
+    returns.forEach((r) => {
+      const key = r.current_holder_name;
+      const existing = map.get(key) || {
+        name: key,
+        type: r.current_holder_type,
+        count: 0,
+        items: [],
+      };
+      existing.count += 1;
+      existing.items.push(r);
+      map.set(key, existing);
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [returns]);
+
+  // Counts by Holder Type
+  const countByType = useMemo(() => {
+    return {
+      ALL: returns.length,
+      MECHANIC: returns.filter((r) => r.current_holder_type === 'MECHANIC').length,
+      CONTAINER_ADMIN: returns.filter((r) => r.current_holder_type === 'CONTAINER_ADMIN').length,
+      MAIN_ADMIN: returns.filter((r) => r.current_holder_type === 'MAIN_ADMIN').length,
+      COMPLETED: returns.filter((r) => r.current_holder_type === 'COMPLETED').length,
+    };
+  }, [returns]);
+
+  // Filter returns based on PJ filters
+  const filteredReturns = useMemo(() => {
+    return returns.filter((r) => {
+      if (selectedHolderType !== 'ALL' && r.current_holder_type !== selectedHolderType) {
+        return false;
+      }
+      if (selectedHolderName && r.current_holder_name !== selectedHolderName) {
+        return false;
+      }
+      return true;
+    });
+  }, [returns, selectedHolderType, selectedHolderName]);
+
+  // Group filtered returns for the 4 Kanban columns
+  const pendingMechanic = filteredReturns.filter((r) => r.status === 'PENDING_RETURN');
+  const atContainer = filteredReturns.filter((r) => r.status === 'RECEIVED_AT_CONTAINER');
+  const atMain = filteredReturns.filter((r) => r.status === 'TRANSFERRED_TO_MAIN');
+  const completed = filteredReturns.filter((r) => r.status === 'COMPLETED');
 
   const mainWarehouses = warehouseList.filter((w) => w.warehouse_type === 'MAIN');
 
@@ -212,6 +273,16 @@ export const UsedPartReturnsPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2 self-start md:self-auto">
           <button
+            type="button"
+            onClick={() => setShowHolderSummaryModal(true)}
+            className="p-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-cyan-300 text-xs flex items-center gap-1.5 transition-colors border border-cyan-500/30 shadow-sm"
+            title="Lihat Daftar & Rekap Part per Penanggung Jawab"
+          >
+            <Users className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Rekapitulasi per PJ ({holderSummary.length})</span>
+          </button>
+          <button
+            type="button"
             onClick={loadReturns}
             className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 transition-colors border border-slate-700"
             title="Muat Ulang Data"
@@ -223,33 +294,203 @@ export const UsedPartReturnsPage: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="glass-panel rounded-2xl p-4 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-        <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Cari nomor retur, kode part, mekanik, atau unit lambung..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
-          />
-        </form>
+      <div className="glass-panel rounded-2xl p-4 border border-slate-800 space-y-3">
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-3">
+          {/* Search Box */}
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Cari nomor retur, kode part, nama PJ/mekanik, atau unit lambung..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+            />
+          </form>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
-          <select
-            value={filterWarehouse}
-            onChange={(e) => setFilterWarehouse(e.target.value)}
-            className="w-full md:w-56 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
-          >
-            <option value="">Semua Gudang Asal</option>
-            {warehouseList.map((w: WarehouseInfo) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.warehouse_type})
-              </option>
-            ))}
-          </select>
+          {/* Filter Dropdown Penanggung Jawab Spesifik */}
+          <div className="flex items-center gap-2 w-full lg:w-auto">
+            <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
+            <select
+              value={selectedHolderName}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedHolderName(val);
+                if (val) {
+                  const match = holderSummary.find((h) => h.name === val);
+                  if (match) setSelectedHolderType(match.type);
+                }
+              }}
+              className="w-full lg:w-60 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">Semua Personil PJ ({holderSummary.length} orang)</option>
+              {holderSummary.map((h) => (
+                <option key={h.name} value={h.name}>
+                  {h.type === 'MECHANIC'
+                    ? '👨‍🔧 [Mekanik] '
+                    : h.type === 'CONTAINER_ADMIN'
+                    ? '📦 [Kontainer] '
+                    : h.type === 'MAIN_ADMIN'
+                    ? '🏢 [Utama] '
+                    : '✅ [Selesai] '}
+                  {h.name} ({h.count} part)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Dropdown Gudang */}
+          <div className="flex items-center gap-2 w-full lg:w-auto">
+            <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
+            <select
+              value={filterWarehouse}
+              onChange={(e) => setFilterWarehouse(e.target.value)}
+              className="w-full lg:w-52 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">Semua Gudang Asal</option>
+              {warehouseList.map((w: WarehouseInfo) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} ({w.warehouse_type})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {/* Quick Filter Pill Chips by Penanggung Jawab (PJ) */}
+        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold text-slate-400 mr-1 flex items-center gap-1.5">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Kategori PJ:</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHolderType('ALL');
+              setSelectedHolderName('');
+            }}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedHolderType === 'ALL' && !selectedHolderName
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>Semua PJ</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 font-mono text-cyan-300">
+              {countByType.ALL}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHolderType('MECHANIC');
+              setSelectedHolderName('');
+            }}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedHolderType === 'MECHANIC' && !selectedHolderName
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>👨‍🔧 Di Mekanik</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 font-mono text-amber-300">
+              {countByType.MECHANIC}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHolderType('CONTAINER_ADMIN');
+              setSelectedHolderName('');
+            }}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedHolderType === 'CONTAINER_ADMIN' && !selectedHolderName
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>📦 Di Admin Kontainer</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/20 font-mono text-cyan-300">
+              {countByType.CONTAINER_ADMIN}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHolderType('MAIN_ADMIN');
+              setSelectedHolderName('');
+            }}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedHolderType === 'MAIN_ADMIN' && !selectedHolderName
+                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>🏢 Di Gudang Utama</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/20 font-mono text-blue-300">
+              {countByType.MAIN_ADMIN}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedHolderType('COMPLETED');
+              setSelectedHolderName('');
+            }}
+            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              selectedHolderType === 'COMPLETED' && !selectedHolderName
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <span>✅ Selesai (Scrap)</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 font-mono text-emerald-300">
+              {countByType.COMPLETED}
+            </span>
+          </button>
+        </div>
+
+        {/* Active Filter Notification Bar */}
+        {(selectedHolderType !== 'ALL' || selectedHolderName) && (
+          <div className="flex items-center justify-between p-2.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+            <div className="flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>
+                Memfilter suku cadang pada PJ:
+                <strong className="text-white ml-1 font-semibold">
+                  {selectedHolderName
+                    ? selectedHolderName
+                    : selectedHolderType === 'MECHANIC'
+                    ? 'Mekanik Lapangan'
+                    : selectedHolderType === 'CONTAINER_ADMIN'
+                    ? 'Admin Gudang Kontainer'
+                    : selectedHolderType === 'MAIN_ADMIN'
+                    ? 'Admin Gudang Utama'
+                    : 'Selesai/Disposisi'}
+                </strong>
+                <span className="ml-2 font-mono text-cyan-300 font-bold">
+                  ({filteredReturns.length} part ditemukan)
+                </span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('ALL');
+                setSelectedHolderName('');
+              }}
+              className="text-xs text-amber-400 hover:text-white underline font-semibold flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Reset Filter</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Summary KPI Badges */}
@@ -306,7 +547,7 @@ export const UsedPartReturnsPage: React.FC = () => {
 
           <div className="space-y-3 min-h-[300px]">
             {pendingMechanic.length === 0 ? (
-              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part tertahan di mekanik.</p>
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part pada kriteria filter ini.</p>
             ) : (
               pendingMechanic.map((item) => (
                 <div
@@ -387,7 +628,7 @@ export const UsedPartReturnsPage: React.FC = () => {
 
           <div className="space-y-3 min-h-[300px]">
             {atContainer.length === 0 ? (
-              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part di kontainer.</p>
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part pada kriteria filter ini.</p>
             ) : (
               atContainer.map((item) => (
                 <div
@@ -478,7 +719,7 @@ export const UsedPartReturnsPage: React.FC = () => {
 
           <div className="space-y-3 min-h-[300px]">
             {atMain.length === 0 ? (
-              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part di gudang utama.</p>
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part pada kriteria filter ini.</p>
             ) : (
               atMain.map((item) => (
                 <div
@@ -555,7 +796,7 @@ export const UsedPartReturnsPage: React.FC = () => {
 
           <div className="space-y-3 min-h-[300px]">
             {completed.length === 0 ? (
-              <p className="text-center text-slate-500 text-xs py-10">Belum ada riwayat retur tuntas.</p>
+              <p className="text-center text-slate-500 text-xs py-10">Tidak ada part pada kriteria filter ini.</p>
             ) : (
               completed.map((item) => (
                 <div
@@ -604,6 +845,124 @@ export const UsedPartReturnsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal: Rekapitulasi per Penanggung Jawab (PJ) */}
+      {showHolderSummaryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-2xl max-h-[85vh] rounded-2xl border border-cyan-500/40 p-6 shadow-2xl flex flex-col space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Users className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">
+                  Rekapitulasi Suku Cadang per Penanggung Jawab ({holderSummary.length} Personil)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHolderSummaryModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Daftar penanggung jawab fisik suku cadang bekas saat ini. Klik tombol <strong>Filter Part PJ Ini</strong> untuk langsung melihat item terkait pada Kanban Board.
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {holderSummary.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-xs">
+                  Belum ada data penanggung jawab fisik.
+                </div>
+              ) : (
+                holderSummary.map((h) => {
+                  const isMechanic = h.type === 'MECHANIC';
+                  const isContainer = h.type === 'CONTAINER_ADMIN';
+                  const isMain = h.type === 'MAIN_ADMIN';
+
+                  return (
+                    <div
+                      key={h.name}
+                      className={`p-3.5 rounded-xl border transition-all ${
+                        selectedHolderName === h.name
+                          ? 'bg-amber-500/10 border-amber-500/60'
+                          : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                isMechanic
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : isContainer
+                                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                                  : isMain
+                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {isMechanic
+                                ? '👨‍🔧 MEKANIK'
+                                : isContainer
+                                ? '📦 ADMIN KONTAINER'
+                                : isMain
+                                ? '🏢 ADMIN GUDANG UTAMA'
+                                : '✅ SELESAI'}
+                            </span>
+                            <span className="font-bold text-white text-xs">{h.name}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            Menanggung <span className="font-mono text-cyan-300 font-bold">{h.count} unit part</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedHolderName(h.name);
+                              setSelectedHolderType(h.type);
+                              setShowHolderSummaryModal(false);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs border border-cyan-500/40 transition-colors"
+                          >
+                            Filter Part PJ Ini &rarr;
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Item details list preview */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex flex-wrap gap-1.5">
+                        {h.items.map((it) => (
+                          <span
+                            key={it.id}
+                            className="text-[10px] px-2 py-0.5 rounded bg-slate-950/80 text-slate-300 border border-slate-800 font-mono"
+                          >
+                            {it.return_number} ({it.spare_part_id} - Unit {it.unit_number})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowHolderSummaryModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal 1: Terima di Gudang Kontainer */}
       {showReceiveModal && selectedReturn && (
