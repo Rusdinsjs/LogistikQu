@@ -10,6 +10,7 @@ import {
   TrendingUp,
   ArrowRight,
   Warehouse,
+  RotateCcw,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -61,13 +62,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             serta tata kelola suplai pasokan untuk mendukung armada tambang.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => onNavigate('pos')}
             className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg shadow-cyan-500/20 transition-all"
           >
             <span>Input POS Issue</span>
             <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => onNavigate('returns')}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow-sm shadow-amber-500/10"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Retur Part Bekas</span>
           </button>
           <button
             onClick={() => onNavigate('replenishment')}
