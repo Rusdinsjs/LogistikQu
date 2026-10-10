@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-cd /home/rus/projects/LogistikQu/backend
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT/backend"
 
 export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev"
 export PORT=8080
@@ -100,7 +101,7 @@ echo "Verify Result: $VERIFY_RES"
 echo "=== 6. Login as Supervisor ==="
 SPV_LOGIN=$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"supervisor","password":"password123"}')
+  -d '{"username":"supervisor_he","password":"password123"}')
 SPV_TOKEN=$(echo "$SPV_LOGIN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 
 echo "=== 7. Supervisor Approves Request (Menerbitkan Drop STO) ==="

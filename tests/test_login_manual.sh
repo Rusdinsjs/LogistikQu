@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-cd /home/rus/projects/LogistikQu/backend
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT/backend"
 
 echo "Starting backend on 8090..."
 SERVER_PORT=8090 nohup ./target/debug/logisticqu-backend > /tmp/logisticqu_backend.log 2>&1 &

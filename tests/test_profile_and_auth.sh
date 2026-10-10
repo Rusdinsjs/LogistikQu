@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-cd /home/rus/projects/LogistikQu
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 echo "Starting backend on port 8090..."
-SERVER_PORT=8090 nohup /home/rus/projects/LogistikQu/backend/target/debug/logisticqu-backend > /tmp/logisticqu_test.log 2>&1 &
+SERVER_PORT=8090 nohup "$PROJECT_ROOT/backend/target/debug/logisticqu-backend" > /tmp/logisticqu_test.log 2>&1 &
 BACKEND_PID=$!
 
 cleanup() {

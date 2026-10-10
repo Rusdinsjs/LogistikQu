@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_URL="http://127.0.0.1:8090/api/v1"
-BACKEND_BIN="/home/rus/projects/LogistikQu/backend/target/debug/logisticqu-backend"
+BACKEND_BIN="$PROJECT_ROOT/backend/target/debug/logisticqu-backend"
 
 echo "=========================================================="
 echo "  TEST: Role Scoping (Supervisor HE/DT) & User Manager   "

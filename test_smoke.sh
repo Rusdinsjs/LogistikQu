@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-cd /home/rus/projects/LogistikQu/backend
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_ROOT/backend"
 
 export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev"
 export PORT=8080
