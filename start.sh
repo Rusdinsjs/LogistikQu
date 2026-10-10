@@ -13,12 +13,8 @@ echo "=================================================================="
 echo "    🚀 MEMULAI APLIKASI LOGISTICQU WMS (PT VALE INDONESIA)       "
 echo "=================================================================="
 
-# 1. Menentukan Port Backend (8080 atau 8090 jika terjadi konflik)
-BACKEND_PORT=8080
-if ss -tulpn 2>/dev/null | grep -q ":8080 "; then
-    echo "⚠️  Port 8080 sedang digunakan service lain. Mengalihkan backend ke port 8090."
-    BACKEND_PORT=8090
-fi
+# 1. Menentukan Port Backend (8090 agar tidak konflik dengan Docker ERP)
+BACKEND_PORT=8090
 
 # 2. Memastikan Database PostgreSQL (Docker) Aktif
 echo ""
@@ -51,6 +47,9 @@ export JWT_SECRET="logisticqu_super_secret_jwt_key_2026_valesite_mining"
 export SERVER_PORT="$BACKEND_PORT"
 export SERVER_HOST="0.0.0.0"
 
+# Matikan proses backend lama jika ada
+pkill -f logisticqu-backend 2>/dev/null || true
+
 # Jalankan backend di background
 "$BACKEND_BIN" > /tmp/logisticqu_backend.log 2>&1 &
 BACKEND_PID=$!
@@ -62,17 +61,26 @@ cleanup() {
     if kill -0 $BACKEND_PID 2>/dev/null; then
         kill $BACKEND_PID 2>/dev/null || true
     fi
+    pkill -f logisticqu-backend 2>/dev/null || true
     echo "👋 LogisticQu berhasil dimatikan."
 }
 trap cleanup EXIT INT TERM
 
 # Tunggu backend siap melayani request
+BACKEND_OK=0
 for i in {1..30}; do
     if curl -s "http://127.0.0.1:$BACKEND_PORT/health" | grep -q "OK"; then
+        BACKEND_OK=1
         break
     fi
-    sleep 0.4
+    sleep 0.5
 done
+
+if [ $BACKEND_OK -eq 0 ]; then
+    echo "❌ Backend server gagal dijalankan! Pesan kesalahan:"
+    cat /tmp/logisticqu_backend.log | tail -n 25
+    exit 1
+fi
 
 echo "✅ Backend aktif pada http://127.0.0.1:$BACKEND_PORT (Log: /tmp/logisticqu_backend.log)"
 

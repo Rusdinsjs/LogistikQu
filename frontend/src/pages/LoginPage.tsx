@@ -14,7 +14,12 @@ export const LoginPage: React.FC = () => {
     try {
       await login(username, password);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Gagal login ke dalam sistem');
+      console.error('Login error:', err);
+      setError(
+        err?.response?.data?.error ||
+        err?.message ||
+        'Gagal login. Pastikan server backend sedang aktif.'
+      );
     }
   };
 
@@ -31,8 +36,14 @@ export const LoginPage: React.FC = () => {
 
   const handleQuickLogin = (uname: string) => {
     setUsername(uname);
+    setError(null);
     login(uname).catch((err: any) => {
-      setError(err?.response?.data?.error || 'Gagal login demo');
+      console.error('Quick login error:', err);
+      setError(
+        err?.response?.data?.error ||
+        err?.message ||
+        'Gagal login demo. Pastikan server backend sedang aktif.'
+      );
     });
   };
 
