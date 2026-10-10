@@ -26,6 +26,7 @@ import type {
   RoleItem,
   CreateUserPayload,
   UpdateUserPayload,
+  UpdateProfilePayload,
 } from './types';
 
 export const api = axios.create({
@@ -50,6 +51,10 @@ export const authApi = {
   },
   getMe: async () => {
     const res = await api.get<UserProfile>('/auth/me');
+    return res.data;
+  },
+  updateProfile: async (payload: UpdateProfilePayload) => {
+    const res = await api.put<UserProfile>('/auth/profile', payload);
     return res.data;
   },
   getDemoUsers: async () => {

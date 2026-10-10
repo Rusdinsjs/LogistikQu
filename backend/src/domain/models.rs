@@ -21,6 +21,20 @@ pub struct UserProfile {
     pub role_name: String,
     pub warehouses: Vec<WarehouseInfo>,
     pub permissions: Vec<String>,
+    pub avatar_url: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProfileRequest {
+    pub username: Option<String>,
+    pub full_name: Option<String>,
+    pub avatar_url: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub current_password: Option<String>,
+    pub new_password: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

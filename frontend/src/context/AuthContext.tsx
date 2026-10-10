@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi } from '../api';
-import type { UserProfile, WarehouseInfo } from '../types';
+import type { UpdateProfilePayload, UserProfile, WarehouseInfo } from '../types';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -11,6 +11,8 @@ interface AuthContextType {
   login: (username: string, password?: string) => Promise<void>;
   logout: () => void;
   setActiveWarehouse: (whId: string) => void;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<UserProfile>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -67,6 +69,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const updateProfile = async (payload: UpdateProfilePayload): Promise<UserProfile> => {
+    const updated = await authApi.updateProfile(payload);
+    setUser(updated);
+    return updated;
+  };
+
+  const refreshProfile = async () => {
+    const profile = await authApi.getMe();
+    setUser(profile);
+  };
+
   const activeWarehouseInfo = user?.warehouses.find((w) => w.id === activeWarehouse);
 
   return (
@@ -80,6 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         setActiveWarehouse,
+        updateProfile,
+        refreshProfile,
       }}
     >
       {children}

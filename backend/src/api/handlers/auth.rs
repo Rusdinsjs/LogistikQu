@@ -2,8 +2,8 @@ use crate::{
     api::middleware::{check_permission, AuthUser},
     config::AppConfig,
     domain::models::{
-        CreateUserRequest, LoginRequest, LoginResponse, RoleItem, UpdateUserRequest,
-        UserManagementItem, UserProfile, WarehouseInfo,
+        CreateUserRequest, LoginRequest, LoginResponse, RoleItem, UpdateProfileRequest,
+        UpdateUserRequest, UserManagementItem, UserProfile, WarehouseInfo,
     },
     error::AppError,
     infrastructure::auth::{create_jwt_token, hash_password, verify_password},
@@ -41,6 +41,7 @@ pub async fn login(
     let row = sqlx::query!(
         r#"
         SELECT u.id, u.username, u.password_hash, u.full_name, u.role_id, u.is_active,
+               u.avatar_url, u.email, u.phone,
                r.name as role_name
         FROM users u
         LEFT JOIN roles r ON u.role_id = r.id
@@ -119,6 +120,9 @@ pub async fn login(
         role_name,
         warehouses,
         permissions,
+        avatar_url: row.avatar_url,
+        email: row.email,
+        phone: row.phone,
     };
 
     Ok(Json(LoginResponse {
@@ -133,7 +137,9 @@ pub async fn get_me(
 ) -> Result<Json<UserProfile>, AppError> {
     let row = sqlx::query!(
         r#"
-        SELECT u.id, u.username, u.full_name, u.role_id, r.name as role_name
+        SELECT u.id, u.username, u.full_name, u.role_id,
+               u.avatar_url, u.email, u.phone,
+               r.name as role_name
         FROM users u
         LEFT JOIN roles r ON u.role_id = r.id
         WHERE u.id = $1
@@ -177,6 +183,187 @@ pub async fn get_me(
         role_name,
         warehouses,
         permissions,
+        avatar_url: row.avatar_url,
+        email: row.email,
+        phone: row.phone,
+    }))
+}
+
+pub async fn update_my_profile(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<UpdateProfileRequest>,
+) -> Result<Json<UserProfile>, AppError> {
+    let existing = sqlx::query!(
+        r#"
+        SELECT id, username, password_hash, full_name, avatar_url, email, phone, role_id
+        FROM users
+        WHERE id = $1
+        "#,
+        user.sub
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Pengguna tidak ditemukan".to_string()))?;
+
+    // Validate and prepare username
+    let updated_username = if let Some(ref u) = payload.username {
+        let trimmed = u.trim();
+        if trimmed.is_empty() {
+            existing.username.clone()
+        } else if trimmed.len() < 3 {
+            return Err(AppError::BadRequest("Username minimal 3 karakter".to_string()));
+        } else if trimmed != existing.username {
+            let exists = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id != $2)",
+                trimmed,
+                existing.id
+            )
+            .fetch_one(&state.pool)
+            .await?
+            .unwrap_or(false);
+
+            if exists {
+                return Err(AppError::BadRequest(format!("Username '{}' sudah digunakan", trimmed)));
+            }
+            trimmed.to_string()
+        } else {
+            existing.username.clone()
+        }
+    } else {
+        existing.username.clone()
+    };
+
+    // Validate and prepare full_name
+    let updated_full_name = if let Some(ref f) = payload.full_name {
+        let trimmed = f.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::BadRequest("Nama lengkap tidak boleh kosong".to_string()));
+        }
+        trimmed.to_string()
+    } else {
+        existing.full_name.clone()
+    };
+
+    // Prepare avatar_url, email, phone
+    let updated_avatar = payload.avatar_url.or(existing.avatar_url);
+    let updated_email = payload.email.or(existing.email);
+    let updated_phone = payload.phone.or(existing.phone);
+
+    // Validate password change if requested
+    let updated_password_hash = if let Some(ref new_pw) = payload.new_password {
+        let trimmed_new = new_pw.trim();
+        if !trimmed_new.is_empty() {
+            let current_pw = payload.current_password.as_deref().unwrap_or("").trim();
+            if current_pw.is_empty() {
+                return Err(AppError::BadRequest("Password saat ini wajib diisi untuk mengubah password".to_string()));
+            }
+
+            let is_valid = verify_password(current_pw, &existing.password_hash)?;
+            if !is_valid {
+                return Err(AppError::BadRequest("Password saat ini tidak cocok".to_string()));
+            }
+
+            if trimmed_new.len() < 6 {
+                return Err(AppError::BadRequest("Password baru minimal 6 karakter".to_string()));
+            }
+
+            Some(hash_password(trimmed_new)?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Execute update
+    sqlx::query!(
+        r#"
+        UPDATE users
+        SET username = $1,
+            full_name = $2,
+            avatar_url = $3,
+            email = $4,
+            phone = $5,
+            password_hash = COALESCE($6, password_hash),
+            updated_at = NOW()
+        WHERE id = $7
+        "#,
+        updated_username,
+        updated_full_name,
+        updated_avatar,
+        updated_email,
+        updated_phone,
+        updated_password_hash,
+        existing.id
+    )
+    .execute(&state.pool)
+    .await?;
+
+    // Record audit log
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO audit_logs (user_id, username, action, entity, entity_id, new_values)
+        VALUES ($1, $2, 'UPDATE_PROFILE', 'USER', $3, $4)
+        "#,
+        existing.id,
+        updated_username,
+        existing.id.to_string(),
+        json!({
+            "username": updated_username,
+            "full_name": updated_full_name,
+            "email": updated_email,
+            "phone": updated_phone,
+            "password_updated": updated_password_hash.is_some()
+        })
+    )
+    .execute(&state.pool)
+    .await;
+
+    // Fetch refreshed UserProfile
+    let role_id = existing.role_id.unwrap_or_else(|| "GUEST".to_string());
+    let role_name = sqlx::query_scalar!(
+        "SELECT name FROM roles WHERE id = $1",
+        role_id
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    .unwrap_or_else(|| "GUEST".to_string());
+
+    let warehouses = sqlx::query_as!(
+        WarehouseInfo,
+        r#"
+        SELECT w.id, w.name, w.warehouse_type, w.category
+        FROM warehouses w
+        INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
+        WHERE uw.user_id = $1
+        ORDER BY w.name
+        "#,
+        existing.id
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let permissions = sqlx::query_scalar!(
+        r#"
+        SELECT permission_id FROM role_permissions WHERE role_id = $1
+        "#,
+        role_id
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    Ok(Json(UserProfile {
+        id: existing.id,
+        username: updated_username,
+        full_name: updated_full_name,
+        role_id,
+        role_name,
+        warehouses,
+        permissions,
+        avatar_url: updated_avatar,
+        email: updated_email,
+        phone: updated_phone,
     }))
 }
 

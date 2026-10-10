@@ -16,6 +16,19 @@ export interface UserProfile {
   role?: string;
   warehouses: WarehouseInfo[];
   permissions: string[];
+  avatar_url?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface UpdateProfilePayload {
+  username?: string;
+  full_name?: string;
+  avatar_url?: string;
+  email?: string;
+  phone?: string;
+  current_password?: string;
+  new_password?: string;
 }
 
 export interface DemoUser {
