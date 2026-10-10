@@ -22,6 +22,7 @@ import {
   Info,
   Tag,
   GitBranch,
+  Box,
 } from 'lucide-react';
 
 export const MasterPage: React.FC = () => {
@@ -77,7 +78,7 @@ export const MasterPage: React.FC = () => {
   const [warehouseFormName, setWarehouseFormName] = useState('');
   const [warehouseFormType, setWarehouseFormType] = useState<'MAIN' | 'CONTAINER'>('CONTAINER');
   const [warehouseFormCategory, setWarehouseFormCategory] = useState<string>('HEAVY_EQUIPMENT');
-  const [warehouseFormParentId, setWarehouseFormParentId] = useState<string>('');
+  const [warehouseFormParentIds, setWarehouseFormParentIds] = useState<string[]>([]);
   const [warehouseFormDesc, setWarehouseFormDesc] = useState('');
   const [warehouseFormActive, setWarehouseFormActive] = useState(true);
   const [savingWarehouse, setSavingWarehouse] = useState(false);
@@ -311,14 +312,22 @@ export const MasterPage: React.FC = () => {
   };
 
   // --- WAREHOUSE CRUD HANDLERS ---
+  const toggleParentWarehouse = (mainWhId: string) => {
+    if (warehouseFormParentIds.includes(mainWhId)) {
+      setWarehouseFormParentIds(warehouseFormParentIds.filter((id) => id !== mainWhId));
+    } else {
+      setWarehouseFormParentIds([...warehouseFormParentIds, mainWhId]);
+    }
+  };
+
   const openCreateWarehouseModal = () => {
     setWarehouseModalMode('create');
     setWarehouseFormId('');
     setWarehouseFormName('');
     setWarehouseFormType('CONTAINER');
     setWarehouseFormCategory(warehouseCategories[0]?.id || 'HEAVY_EQUIPMENT');
-    const defaultParent = warehouses.find((w) => w.warehouse_type === 'MAIN')?.id || '';
-    setWarehouseFormParentId(defaultParent);
+    const defaultParent = warehouses.find((w) => w.warehouse_type === 'MAIN')?.id;
+    setWarehouseFormParentIds(defaultParent ? [defaultParent] : []);
     setWarehouseFormDesc('');
     setWarehouseFormActive(true);
     setShowWarehouseModal(true);
@@ -330,7 +339,10 @@ export const MasterPage: React.FC = () => {
     setWarehouseFormName(wh.name);
     setWarehouseFormType(wh.warehouse_type);
     setWarehouseFormCategory(wh.category || warehouseCategories[0]?.id || 'HEAVY_EQUIPMENT');
-    setWarehouseFormParentId(wh.parent_warehouse_id || '');
+    const parents = (wh.parent_warehouse_ids && wh.parent_warehouse_ids.length > 0)
+      ? wh.parent_warehouse_ids
+      : (wh.parent_warehouse_id ? [wh.parent_warehouse_id] : []);
+    setWarehouseFormParentIds(parents);
     setWarehouseFormDesc(wh.description || '');
     setWarehouseFormActive(wh.is_active ?? true);
     setShowWarehouseModal(true);
@@ -345,14 +357,16 @@ export const MasterPage: React.FC = () => {
 
     setSavingWarehouse(true);
     try {
-      const parentId = warehouseFormType === 'CONTAINER' ? (warehouseFormParentId.trim() || null) : null;
+      const parentIds = warehouseFormType === 'CONTAINER' ? warehouseFormParentIds : [];
+      const primaryParentId = parentIds.length > 0 ? parentIds[0] : null;
       if (warehouseModalMode === 'create') {
         const res = await masterApi.createWarehouse({
           id: warehouseFormId.trim() || undefined,
           name: warehouseFormName.trim(),
           warehouse_type: warehouseFormType,
           category: warehouseFormCategory,
-          parent_warehouse_id: parentId,
+          parent_warehouse_id: primaryParentId,
+          parent_warehouse_ids: parentIds,
           description: warehouseFormDesc.trim() || undefined,
           is_active: warehouseFormActive,
         });
@@ -362,7 +376,8 @@ export const MasterPage: React.FC = () => {
           name: warehouseFormName.trim(),
           warehouse_type: warehouseFormType,
           category: warehouseFormCategory,
-          parent_warehouse_id: parentId,
+          parent_warehouse_id: primaryParentId,
+          parent_warehouse_ids: parentIds,
           description: warehouseFormDesc.trim() || undefined,
           is_active: warehouseFormActive,
         });
@@ -969,17 +984,75 @@ export const MasterPage: React.FC = () => {
                         >
                           {wh.warehouse_type === 'MAIN' ? '🏢 GUDANG INDUK' : '📦 GUDANG SUB (KONTAINER)'}
                         </span>
-                        {wh.parent_warehouse_id && (
-                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                            <GitBranch className="w-3 h-3" />
-                            <span>Induk: {warehouses.find((p) => p.id === wh.parent_warehouse_id)?.name || wh.parent_warehouse_id}</span>
-                          </span>
-                        )}
                         <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
                           {warehouseCategories.find((c) => c.id === wh.category)?.name || wh.category}
                         </span>
                       </div>
                       <h3 className="text-base font-bold text-slate-100 mt-2">{wh.name}</h3>
+
+                      {/* RELASI MULTI-PENYUPLAI ATAU SUB-KONTAINER */}
+                      {wh.warehouse_type === 'CONTAINER' && (() => {
+                        const parents = (wh.parent_warehouse_ids && wh.parent_warehouse_ids.length > 0)
+                          ? wh.parent_warehouse_ids
+                          : (wh.parent_warehouse_id ? [wh.parent_warehouse_id] : []);
+                        if (parents.length > 0) {
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-1.5">
+                              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                <GitBranch className="w-3 h-3 text-indigo-400" /> Disuplai oleh:
+                              </span>
+                              {parents.map((pid) => {
+                                const parentWh = warehouses.find((p) => p.id === pid);
+                                return (
+                                  <span
+                                    key={pid}
+                                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1"
+                                    title={`Gudang Induk Penyuplai: ${parentWh?.name || pid}`}
+                                  >
+                                    <span>{parentWh ? parentWh.name : pid}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="pt-1 text-[11px] text-slate-500 italic">
+                            Belum terhubung ke Gudang Induk penyuplai
+                          </div>
+                        );
+                      })()}
+
+                      {wh.warehouse_type === 'MAIN' && (() => {
+                        const subs = (wh.supplied_sub_warehouse_ids && wh.supplied_sub_warehouse_ids.length > 0)
+                          ? wh.supplied_sub_warehouse_ids
+                          : warehouses
+                              .filter((sub) => sub.warehouse_type === 'CONTAINER' && (sub.parent_warehouse_ids?.includes(wh.id) || sub.parent_warehouse_id === wh.id))
+                              .map((s) => s.id);
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1.5">
+                            <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                              <Box className="w-3 h-3 text-cyan-400" /> Menyuplai Sub:
+                            </span>
+                            {subs.length > 0 ? (
+                              subs.map((sid) => {
+                                const subWh = warehouses.find((s) => s.id === sid);
+                                return (
+                                  <span
+                                    key={sid}
+                                    className="px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1"
+                                    title={`Gudang Sub Kontainer: ${subWh?.name || sid}`}
+                                  >
+                                    <span>{subWh ? subWh.name : sid}</span>
+                                  </span>
+                                );
+                              })
+                            ) : (
+                              <span className="text-[11px] text-slate-500 italic">Belum ada kontainer terhubung</span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <span
@@ -1410,28 +1483,82 @@ export const MasterPage: React.FC = () => {
               </div>
 
               {warehouseFormType === 'CONTAINER' && (
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-indigo-500/30 space-y-1">
-                  <label className="block text-indigo-300 font-semibold mb-1 flex items-center gap-1.5">
-                    <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Gudang Induk Acuan (Tempat Menginduk / Suplai) *</span>
-                  </label>
-                  <select
-                    value={warehouseFormParentId}
-                    onChange={(e) => setWarehouseFormParentId(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-slate-900 border border-indigo-500/40 rounded-lg text-slate-100 focus:border-indigo-400 focus:outline-none"
-                  >
-                    <option value="">-- Pilih Gudang Induk Penyuplai --</option>
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-indigo-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-indigo-300 font-semibold flex items-center gap-1.5">
+                      <GitBranch className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Gudang Induk Penyuplai (Dapat Lebih dari 1) *</span>
+                    </label>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono font-bold">
+                      {warehouseFormParentIds.length} terpilih
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Centang satu atau beberapa Gudang Induk yang menjadi sumber pasokan (drop STO & replenishment) untuk Gudang Sub ini:
+                  </p>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                     {warehouses
                       .filter((w) => w.warehouse_type === 'MAIN')
-                      .map((mw) => (
-                        <option key={mw.id} value={mw.id}>
-                          {mw.id} — {mw.name} ({warehouseCategories.find((c) => c.id === mw.category)?.name || mw.category})
-                        </option>
-                      ))}
-                  </select>
-                  <p className="text-[11px] text-slate-400 italic">
-                    Gudang Sub (Kontainer Lapangan) akan otomatis mengajukan permohonan stok & STO ke Gudang Induk penyuplai ini.
-                  </p>
+                      .map((mw) => {
+                        const isSelected = warehouseFormParentIds.includes(mw.id);
+                        const catName = warehouseCategories.find((c) => c.id === mw.category)?.name || mw.category;
+                        return (
+                          <div
+                            key={mw.id}
+                            onClick={() => toggleParentWarehouse(mw.id)}
+                            className={`p-2 rounded-lg border cursor-pointer transition flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? 'bg-indigo-950/40 border-indigo-500/50 text-white'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // handled by parent onClick
+                                className="w-4 h-4 rounded border-slate-700 text-indigo-500 focus:ring-0 cursor-pointer"
+                              />
+                              <div>
+                                <div className="text-xs font-semibold">{mw.name}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  {mw.id} • {catName}
+                                </div>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-medium">
+                                Penyuplai Aktif
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allMainIds = warehouses.filter((w) => w.warehouse_type === 'MAIN').map((w) => w.id);
+                        setWarehouseFormParentIds(allMainIds);
+                      }}
+                      className="text-indigo-400 hover:text-indigo-300 underline"
+                    >
+                      Pilih Semua Gudang Induk
+                    </button>
+                    {warehouseFormParentIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setWarehouseFormParentIds([])}
+                        className="text-slate-400 hover:text-rose-400 underline"
+                      >
+                        Kosongkan Pilihan
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

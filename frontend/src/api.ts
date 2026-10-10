@@ -119,11 +119,11 @@ export const masterApi = {
     const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/sites/${id}`);
     return res.data;
   },
-  createWarehouse: async (payload: { id?: string; name: string; warehouse_type: string; category: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null }) => {
+  createWarehouse: async (payload: { id?: string; name: string; warehouse_type: string; category: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null; parent_warehouse_ids?: string[] }) => {
     const res = await api.post<{ success: boolean; warehouse: WarehouseInfo; message: string }>('/master/warehouses', payload);
     return res.data;
   },
-  updateWarehouse: async (id: string, payload: { name?: string; warehouse_type?: string; category?: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null }) => {
+  updateWarehouse: async (id: string, payload: { name?: string; warehouse_type?: string; category?: string; description?: string; is_active?: boolean; parent_warehouse_id?: string | null; parent_warehouse_ids?: string[] }) => {
     const res = await api.put<{ success: boolean; warehouse: WarehouseInfo; message: string }>(`/master/warehouses/${id}`, payload);
     return res.data;
   },

@@ -123,9 +123,18 @@ pub async fn list_warehouses(
     let items = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id
-        FROM warehouses
-        ORDER BY id
+        SELECT
+            w.id,
+            w.name,
+            w.warehouse_type,
+            w.category,
+            w.description,
+            w.is_active,
+            w.parent_warehouse_id,
+            ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+            ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
+        FROM warehouses w
+        ORDER BY w.id
         "#
     )
     .fetch_all(&state.pool)
@@ -514,6 +523,33 @@ pub async fn delete_site(
     })))
 }
 
+async fn fetch_warehouse_info(
+    pool: &sqlx::PgPool,
+    warehouse_id: &str,
+) -> Result<WarehouseInfo, AppError> {
+    sqlx::query_as!(
+        WarehouseInfo,
+        r#"
+        SELECT
+            w.id,
+            w.name,
+            w.warehouse_type,
+            w.category,
+            w.description,
+            w.is_active,
+            w.parent_warehouse_id,
+            ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+            ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
+        FROM warehouses w
+        WHERE w.id = $1
+        "#,
+        warehouse_id
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("Gudang dengan ID '{}' tidak ditemukan", warehouse_id)))
+}
+
 pub async fn create_warehouse(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -543,14 +579,31 @@ pub async fn create_warehouse(
     });
 
     let is_active = payload.is_active.unwrap_or(true);
-    let parent_id = if wh_type == "CONTAINER" {
-        payload.parent_warehouse_id
-    } else {
-        None
-    };
 
-    let row = sqlx::query_as!(
-        WarehouseInfo,
+    // Multi-parent links handling
+    let mut target_parent_ids: Vec<String> = Vec::new();
+    if wh_type == "CONTAINER" {
+        if let Some(ids) = payload.parent_warehouse_ids {
+            for pid in ids {
+                let trimmed = pid.trim().to_string();
+                if !trimmed.is_empty() && !target_parent_ids.contains(&trimmed) {
+                    target_parent_ids.push(trimmed);
+                }
+            }
+        }
+        if target_parent_ids.is_empty() {
+            if let Some(pid) = payload.parent_warehouse_id {
+                let trimmed = pid.trim().to_string();
+                if !trimmed.is_empty() {
+                    target_parent_ids.push(trimmed);
+                }
+            }
+        }
+    }
+
+    let primary_parent_id = target_parent_ids.first().cloned();
+
+    sqlx::query!(
         r#"
         INSERT INTO warehouses (id, name, warehouse_type, category, description, is_active, parent_warehouse_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -561,7 +614,6 @@ pub async fn create_warehouse(
             description = EXCLUDED.description,
             is_active = EXCLUDED.is_active,
             parent_warehouse_id = EXCLUDED.parent_warehouse_id
-        RETURNING id, name, warehouse_type, category, description, is_active, parent_warehouse_id
         "#,
         id,
         name,
@@ -569,10 +621,25 @@ pub async fn create_warehouse(
         category,
         payload.description,
         is_active,
-        parent_id
+        primary_parent_id
     )
-    .fetch_one(&state.pool)
+    .execute(&state.pool)
     .await?;
+
+    // Update warehouse_supply_links
+    sqlx::query!("DELETE FROM warehouse_supply_links WHERE sub_warehouse_id = $1", id)
+        .execute(&state.pool)
+        .await?;
+
+    for pid in &target_parent_ids {
+        sqlx::query!(
+            "INSERT INTO warehouse_supply_links (sub_warehouse_id, main_warehouse_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            id,
+            pid
+        )
+        .execute(&state.pool)
+        .await?;
+    }
 
     // Auto assign new warehouse to SUPER_ADMIN & MANAGER
     let _ = sqlx::query!(
@@ -582,10 +649,12 @@ pub async fn create_warehouse(
         WHERE u.role_id IN ('SUPER_ADMIN', 'MANAGER')
         ON CONFLICT DO NOTHING
         "#,
-        row.id
+        id
     )
     .execute(&state.pool)
     .await;
+
+    let row = fetch_warehouse_info(&state.pool, &id).await?;
 
     let _ = sqlx::query!(
         r#"
@@ -601,7 +670,8 @@ pub async fn create_warehouse(
             "category": row.category,
             "description": row.description,
             "is_active": row.is_active,
-            "parent_warehouse_id": row.parent_warehouse_id
+            "parent_warehouse_id": row.parent_warehouse_id,
+            "parent_warehouse_ids": row.parent_warehouse_ids
         })
     )
     .execute(&state.pool)
@@ -622,33 +692,50 @@ pub async fn update_warehouse(
 ) -> Result<Json<Value>, AppError> {
     check_permission(&state.pool, &user, "master.manage").await?;
 
-    let existing = sqlx::query_as!(
-        WarehouseInfo,
-        "SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id FROM warehouses WHERE id = $1",
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound(format!("Gudang dengan ID '{}' tidak ditemukan", id)))?;
+    let existing = fetch_warehouse_info(&state.pool, &id).await?;
 
     let name = payload.name.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or(existing.name);
     let wh_type = payload.warehouse_type.map(|s| s.trim().to_uppercase()).unwrap_or(existing.warehouse_type);
     let category = payload.category.map(|s| s.trim().to_uppercase()).unwrap_or(existing.category);
     let description = payload.description.or(existing.description);
     let is_active = payload.is_active.unwrap_or(existing.is_active);
-    let parent_id = if wh_type == "CONTAINER" {
-        payload.parent_warehouse_id.or(existing.parent_warehouse_id)
+
+    // Multi-parent links handling
+    let target_parent_ids = if wh_type == "CONTAINER" {
+        if let Some(ids) = payload.parent_warehouse_ids {
+            let mut list = Vec::new();
+            for pid in ids {
+                let trimmed = pid.trim().to_string();
+                if !trimmed.is_empty() && !list.contains(&trimmed) {
+                    list.push(trimmed);
+                }
+            }
+            Some(list)
+        } else if let Some(pid) = payload.parent_warehouse_id {
+            let trimmed = pid.trim().to_string();
+            if !trimmed.is_empty() {
+                Some(vec![trimmed])
+            } else {
+                Some(vec![])
+            }
+        } else {
+            None // Keep existing
+        }
     } else {
-        None
+        Some(vec![]) // Reset links if changed to MAIN
     };
 
-    let updated = sqlx::query_as!(
-        WarehouseInfo,
+    let parent_id = if let Some(ref links) = target_parent_ids {
+        links.first().cloned()
+    } else {
+        existing.parent_warehouse_id
+    };
+
+    sqlx::query!(
         r#"
         UPDATE warehouses
         SET name = $1, warehouse_type = $2, category = $3, description = $4, is_active = $5, parent_warehouse_id = $6
         WHERE id = $7
-        RETURNING id, name, warehouse_type, category, description, is_active, parent_warehouse_id
         "#,
         name,
         wh_type,
@@ -658,8 +745,27 @@ pub async fn update_warehouse(
         parent_id,
         id
     )
-    .fetch_one(&state.pool)
+    .execute(&state.pool)
     .await?;
+
+    // If supply links were explicitly provided or warehouse became MAIN, sync them
+    if let Some(ref links) = target_parent_ids {
+        sqlx::query!("DELETE FROM warehouse_supply_links WHERE sub_warehouse_id = $1", id)
+            .execute(&state.pool)
+            .await?;
+
+        for pid in links {
+            sqlx::query!(
+                "INSERT INTO warehouse_supply_links (sub_warehouse_id, main_warehouse_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                id,
+                pid
+            )
+            .execute(&state.pool)
+            .await?;
+        }
+    }
+
+    let updated = fetch_warehouse_info(&state.pool, &id).await?;
 
     let _ = sqlx::query!(
         r#"
@@ -675,7 +781,8 @@ pub async fn update_warehouse(
             "category": updated.category,
             "description": updated.description,
             "is_active": updated.is_active,
-            "parent_warehouse_id": updated.parent_warehouse_id
+            "parent_warehouse_id": updated.parent_warehouse_id,
+            "parent_warehouse_ids": updated.parent_warehouse_ids
         })
     )
     .execute(&state.pool)
@@ -695,14 +802,10 @@ pub async fn delete_warehouse(
 ) -> Result<Json<Value>, AppError> {
     check_permission(&state.pool, &user, "master.manage").await?;
 
-    let existing = sqlx::query_as!(
-        WarehouseInfo,
-        "SELECT id, name, warehouse_type, category, description, is_active, parent_warehouse_id FROM warehouses WHERE id = $1",
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound(format!("Gudang dengan ID '{}' tidak ditemukan", id)))?;
+    let existing = sqlx::query!("SELECT id, name FROM warehouses WHERE id = $1", id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Gudang dengan ID '{}' tidak ditemukan", id)))?;
 
     let has_stock = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM inventory_stock WHERE warehouse_id = $1)", id)
         .fetch_one(&state.pool).await?.unwrap_or(false);
@@ -741,6 +844,10 @@ pub async fn delete_warehouse(
             "message": format!("Gudang {} memiliki transaksi/stok terkait sehingga statusnya dinonaktifkan (soft delete)", existing.name)
         })));
     }
+
+    sqlx::query!("DELETE FROM warehouse_supply_links WHERE sub_warehouse_id = $1 OR main_warehouse_id = $1", id)
+        .execute(&state.pool)
+        .await?;
 
     sqlx::query!("DELETE FROM user_warehouses WHERE warehouse_id = $1", id)
         .execute(&state.pool)

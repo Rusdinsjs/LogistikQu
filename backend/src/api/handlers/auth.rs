@@ -69,7 +69,16 @@ pub async fn login(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
+        SELECT
+            w.id,
+            w.name,
+            w.warehouse_type,
+            w.category,
+            w.description,
+            w.is_active,
+            w.parent_warehouse_id,
+            ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+            ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -155,7 +164,16 @@ pub async fn get_me(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
+        SELECT
+            w.id,
+            w.name,
+            w.warehouse_type,
+            w.category,
+            w.description,
+            w.is_active,
+            w.parent_warehouse_id,
+            ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+            ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -333,7 +351,16 @@ pub async fn update_my_profile(
     let warehouses = sqlx::query_as!(
         WarehouseInfo,
         r#"
-        SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
+        SELECT
+            w.id,
+            w.name,
+            w.warehouse_type,
+            w.category,
+            w.description,
+            w.is_active,
+            w.parent_warehouse_id,
+            ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+            ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
         FROM warehouses w
         INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
         WHERE uw.user_id = $1
@@ -443,7 +470,16 @@ pub async fn list_users(
         let whs = sqlx::query_as!(
             WarehouseInfo,
             r#"
-            SELECT w.id, w.name, w.warehouse_type, w.category, w.description, w.is_active, w.parent_warehouse_id
+            SELECT
+                w.id,
+                w.name,
+                w.warehouse_type,
+                w.category,
+                w.description,
+                w.is_active,
+                w.parent_warehouse_id,
+                ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS "parent_warehouse_ids?",
+                ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS "supplied_sub_warehouse_ids?"
             FROM warehouses w
             INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id
             WHERE uw.user_id = $1

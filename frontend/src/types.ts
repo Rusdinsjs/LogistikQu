@@ -7,6 +7,8 @@ export interface WarehouseInfo {
   description?: string;
   is_active?: boolean;
   parent_warehouse_id?: string | null;
+  parent_warehouse_ids?: string[] | null;
+  supplied_sub_warehouse_ids?: string[] | null;
 }
 
 export interface WarehouseCategory {

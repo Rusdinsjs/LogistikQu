@@ -8,6 +8,8 @@ export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logi
 export PORT=8080
 export JWT_SECRET="super-secret-jwt-key-vale-indonesia-logisticqu-2026"
 export RUST_LOG=info
+export no_proxy="*"
+export NO_PROXY="*"
 
 # Start backend
 ./target/debug/logisticqu-backend > /tmp/backend_test.log 2>&1 &
@@ -59,5 +61,42 @@ echo "=== 6. MASTER SPARE PARTS ==="
 curl -s -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8080/api/v1/master/spare-parts" | cut -c 1-200
 echo "..."
+
+# Test Warehouse Multi-Parent Supply Links
+echo "=== 7. WAREHOUSE LIST WITH MULTI-PARENT SUPPLY LINKS ==="
+LOGIN_ADMIN=$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"superadmin","password":"password123"}')
+ADMIN_TOKEN=$(echo "$LOGIN_ADMIN" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+WH_LIST=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://127.0.0.1:8080/api/v1/master/warehouses")
+echo "$WH_LIST" | cut -c 1-300
+echo "..."
+
+echo "=== 8. CREATE SUB WAREHOUSE WITH MULTIPLE PARENT WAREHOUSES ==="
+CREATE_WH_RES=$(curl -s -X POST http://127.0.0.1:8080/api/v1/master/warehouses \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "WH-CONT-MULTI-TEST",
+    "name": "Gudang Kontainer Multi Suplai Test",
+    "warehouse_type": "CONTAINER",
+    "category": "HEAVY_EQUIPMENT",
+    "parent_warehouse_ids": ["WH-MAIN-HE", "WH-MAIN-DT"],
+    "description": "Uji coba kontainer yang disuplai oleh 2 gudang induk",
+    "is_active": true
+  }')
+echo "$CREATE_WH_RES"
+
+echo "=== 9. VERIFY CREATED WAREHOUSE SUPPLY LINKS ==="
+VERIFY_RES=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://127.0.0.1:8080/api/v1/master/warehouses")
+echo "$VERIFY_RES" | grep -o '"id":"WH-CONT-MULTI-TEST"[^}]*'
+
+echo "=== 10. CLEANUP TEST WAREHOUSE ==="
+DEL_RES=$(curl -s -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://127.0.0.1:8080/api/v1/master/warehouses/WH-CONT-MULTI-TEST")
+echo "$DEL_RES"
 
 echo "ALL ENDPOINTS RESPONDED WITH CODE 200 OK!"

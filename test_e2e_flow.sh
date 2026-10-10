@@ -8,6 +8,8 @@ export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logi
 export PORT=8080
 export JWT_SECRET="super-secret-jwt-key-vale-indonesia-logisticqu-2026"
 export RUST_LOG=info
+export no_proxy="*"
+export NO_PROXY="*"
 
 # Start backend
 ./target/debug/logisticqu-backend > /tmp/e2e_backend.log 2>&1 &

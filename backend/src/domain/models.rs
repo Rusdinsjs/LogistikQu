@@ -46,6 +46,8 @@ pub struct WarehouseInfo {
     pub description: Option<String>,
     pub is_active: bool,
     pub parent_warehouse_id: Option<String>,
+    pub parent_warehouse_ids: Option<Vec<String>>,
+    pub supplied_sub_warehouse_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -494,6 +496,7 @@ pub struct CreateWarehouseRequest {
     pub description: Option<String>,
     pub is_active: Option<bool>,
     pub parent_warehouse_id: Option<String>,
+    pub parent_warehouse_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -504,6 +507,7 @@ pub struct UpdateWarehouseRequest {
     pub description: Option<String>,
     pub is_active: Option<bool>,
     pub parent_warehouse_id: Option<String>,
+    pub parent_warehouse_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
