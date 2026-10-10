@@ -8,6 +8,7 @@ use axum::{
 use handlers::{
     adjustment::{approve_adjustment, create_adjustment, list_adjustments},
     audit::list_audit_logs,
+    bins::{create_warehouse_bin, delete_warehouse_bin, list_warehouse_bins, relocate_stock_bin, update_warehouse_bin},
     auth::{
         create_user, get_me, list_demo_users, list_roles, list_users, login, update_my_profile,
         update_user, AppState,
@@ -52,6 +53,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/master/sites/{id}", put(update_site).delete(delete_site))
         .route("/master/warehouses", get(list_warehouses).post(create_warehouse))
         .route("/master/warehouses/{id}", put(update_warehouse).delete(delete_warehouse))
+        // Warehouse Bins & Container Racks
+        .route("/warehouses/{warehouse_id}/bins", get(list_warehouse_bins).post(create_warehouse_bin))
+        .route("/warehouses/{warehouse_id}/bins/{bin_id}", put(update_warehouse_bin).delete(delete_warehouse_bin))
+        .route("/warehouses/{warehouse_id}/bins/relocate", post(relocate_stock_bin))
         // Inventory
         .route("/inventory/stock", get(list_inventory_stock))
         .route("/inventory/stock/{warehouse_id}/{spare_part_id}/movements", get(get_stock_movements))

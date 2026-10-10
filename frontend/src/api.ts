@@ -1,5 +1,8 @@
 import axios from 'axios';
 import type {
+  WarehouseBinItem,
+  CreateBinPayload,
+  UpdateBinPayload,
   AuditLog,
   CreateIssuePayload,
   DashboardSummary,
@@ -316,3 +319,29 @@ export const returnsApi = {
   },
 };
 
+
+export const binApi = {
+  getWarehouseBins: async (warehouse_id: string) => {
+    const res = await api.get<WarehouseBinItem[]>(`/warehouses/${warehouse_id}/bins`);
+    return res.data;
+  },
+  createBin: async (warehouse_id: string, payload: CreateBinPayload) => {
+    const res = await api.post<{ success: boolean; message: string }>(`/warehouses/${warehouse_id}/bins`, payload);
+    return res.data;
+  },
+  updateBin: async (warehouse_id: string, bin_id: string, payload: UpdateBinPayload) => {
+    const res = await api.put<{ success: boolean; message: string }>(`/warehouses/${warehouse_id}/bins/${bin_id}`, payload);
+    return res.data;
+  },
+  deleteBin: async (warehouse_id: string, bin_id: string) => {
+    const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/warehouses/${warehouse_id}/bins/${bin_id}`);
+    return res.data;
+  },
+  relocateStockBin: async (warehouse_id: string, spare_part_id: string, target_bin_code?: string) => {
+    const res = await api.post<{ success: boolean; message: string }>(`/warehouses/${warehouse_id}/bins/relocate`, {
+      spare_part_id,
+      target_bin_code,
+    });
+    return res.data;
+  },
+};

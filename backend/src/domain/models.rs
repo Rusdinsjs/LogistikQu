@@ -502,3 +502,45 @@ pub struct UpdateWarehouseRequest {
     pub description: Option<String>,
     pub is_active: Option<bool>,
 }
+
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct WarehouseBinItem {
+    pub id: Uuid,
+    pub warehouse_id: String,
+    pub bin_code: String,
+    pub zone: String,
+    pub shelf_level: String,
+    pub capacity_parts: i32,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub current_items_count: Option<i64>,
+    pub total_qty: Option<Decimal>,
+    pub parts: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateBinRequest {
+    pub bin_code: String,
+    pub zone: Option<String>,
+    pub shelf_level: Option<String>,
+    pub capacity_parts: Option<i32>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateBinRequest {
+    pub bin_code: Option<String>,
+    pub zone: Option<String>,
+    pub shelf_level: Option<String>,
+    pub capacity_parts: Option<i32>,
+    pub description: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RelocateStockBinRequest {
+    pub spare_part_id: String,
+    pub target_bin_code: Option<String>,
+}

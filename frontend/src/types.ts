@@ -410,3 +410,41 @@ export interface CompleteReturnPayload {
   disposition?: string;
 }
 
+
+export interface WarehouseBinItem {
+  id: string;
+  warehouse_id: string;
+  bin_code: string;
+  zone: string;
+  shelf_level: string;
+  capacity_parts: number;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+  current_items_count: number;
+  total_qty: number;
+  parts: Array<{
+    spare_part_id: string;
+    part_name: string;
+    qty_on_hand: number;
+    unit_of_measure: string;
+    status: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  }>;
+}
+
+export interface CreateBinPayload {
+  bin_code: string;
+  zone?: string;
+  shelf_level?: string;
+  capacity_parts?: number;
+  description?: string;
+}
+
+export interface UpdateBinPayload {
+  bin_code?: string;
+  zone?: string;
+  shelf_level?: string;
+  capacity_parts?: number;
+  description?: string;
+  is_active?: boolean;
+}

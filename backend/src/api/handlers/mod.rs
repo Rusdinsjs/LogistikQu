@@ -10,3 +10,4 @@ pub mod reports;
 pub mod returns;
 pub mod sync;
 
+pub mod bins;
