@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE replenishment_requests\n            SET status = 'RETURNED_TO_CONTAINER_ADMIN', admin_notes = $1, updated_at = NOW()\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2287f900f6247068c13d1a18a4ec9cd301325971b47847a51ee12e56e20d289a"
+}

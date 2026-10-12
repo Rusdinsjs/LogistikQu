@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO stock_movements (warehouse_id, spare_part_id, movement_type, qty, balance_after, reference_number, notes, created_by)\n                VALUES ($1, $2, 'INITIAL_IMPORT', $3, $3, 'IMPORT-MANUAL', 'Import saldo awal kontainer', $4)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0faede6cecabd4c2d49d22e661ccbd283c624b1b7357b434fdff736074a14bfd"
+}

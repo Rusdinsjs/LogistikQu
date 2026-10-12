@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO employees (id, name, department_id, is_mechanic, position, is_active)\n            VALUES ($1, $2, $3, $4, $5, TRUE)\n            RETURNING id, name, department_id, is_mechanic, position, is_active\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "department_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_mechanic",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "position",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "520f16252e1539f6c74f5f9efdef86cbe4f3ef8cb9da0957e719ce5dd25cb9fd"
+}

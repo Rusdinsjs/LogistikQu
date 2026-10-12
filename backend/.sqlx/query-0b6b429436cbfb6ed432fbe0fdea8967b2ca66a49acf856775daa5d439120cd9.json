@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                e.id AS equipment_id,\n                e.unit_number,\n                COALESCE(c.id, 'UNASSIGNED') AS component_id,\n                COALESCE(c.name, 'Unassigned Component') AS component_name,\n                p.id AS spare_part_id,\n                p.part_name,\n                COALESCE(SUM(m.parts_qty), 0::numeric) AS total_qty_consumed,\n                COALESCE(SUM(m.parts_cost), 0::numeric) AS total_spend,\n                COUNT(m.id) AS failure_count,\n                (\n                    SELECT m_sub.failure_code\n                    FROM equipment_maintenance_history m_sub\n                    WHERE m_sub.equipment_id = e.id\n                      AND m_sub.spare_part_id = p.id\n                    ORDER BY m_sub.performed_at DESC\n                    LIMIT 1\n                ) AS latest_failure_code,\n                (\n                    SELECT m_sub.performed_at\n                    FROM equipment_maintenance_history m_sub\n                    WHERE m_sub.equipment_id = e.id\n                      AND m_sub.spare_part_id = p.id\n                    ORDER BY m_sub.performed_at DESC\n                    LIMIT 1\n                ) AS latest_performed_at\n            FROM equipment_maintenance_history m\n            JOIN equipment e ON m.equipment_id = e.id\n            JOIN spare_parts p ON m.spare_part_id = p.id\n            LEFT JOIN equipment_components c ON m.component_id = c.id\n            WHERE ($1 = '' OR e.id = $1 OR e.unit_number = $1)\n            GROUP BY e.id, e.unit_number, c.id, c.name, p.id, p.part_name\n            ORDER BY total_spend DESC, e.unit_number ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "equipment_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "component_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "component_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_qty_consumed",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_spend",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "failure_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "latest_failure_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "latest_performed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0b6b429436cbfb6ed432fbe0fdea8967b2ca66a49acf856775daa5d439120cd9"
+}

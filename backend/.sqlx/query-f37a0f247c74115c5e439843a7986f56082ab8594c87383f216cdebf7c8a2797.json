@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT spare_part_id, approved_qty\n            FROM replenishment_request_items\n            WHERE request_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "approved_qty",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f37a0f247c74115c5e439843a7986f56082ab8594c87383f216cdebf7c8a2797"
+}

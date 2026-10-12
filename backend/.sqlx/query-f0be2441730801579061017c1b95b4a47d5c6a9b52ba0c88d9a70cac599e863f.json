@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE replenishment_requests\n            SET status = 'COMPLETED', received_by = $1, received_at = NOW(), updated_at = NOW()\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0be2441730801579061017c1b95b4a47d5c6a9b52ba0c88d9a70cac599e863f"
+}

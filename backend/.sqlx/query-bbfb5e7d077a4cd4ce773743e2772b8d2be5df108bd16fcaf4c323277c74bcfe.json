@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, drop_number, main_warehouse_id, container_warehouse_id, status, shipped_at, notes\n            FROM main_warehouse_drops\n            WHERE request_id = $1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "drop_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "main_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "container_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "shipped_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "bbfb5e7d077a4cd4ce773743e2772b8d2be5df108bd16fcaf4c323277c74bcfe"
+}

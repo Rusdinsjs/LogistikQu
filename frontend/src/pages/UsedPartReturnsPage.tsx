@@ -27,6 +27,23 @@ import {
 export const UsedPartReturnsPage: React.FC = () => {
   const { user } = useAuth();
 
+  const canReceiveReturn =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('returns.receive') ||
+    user?.permissions?.includes('issue.create');
+
+  const canTransferReturn =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('returns.transfer') ||
+    user?.permissions?.includes('request.verify') ||
+    user?.permissions?.includes('sto.ship');
+
+  const canCompleteReturn =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('returns.complete') ||
+    user?.permissions?.includes('issue.approve') ||
+    user?.permissions?.includes('request.approve');
+
   const [returns, setReturns] = useState<UsedPartReturn[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -597,17 +614,19 @@ export const UsedPartReturnsPage: React.FC = () => {
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedReturn(item);
-                        setShowReceiveModal(true);
-                      }}
-                      className="flex-1 py-1.5 px-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-[11px] border border-cyan-500/40 flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <CheckCircle className="w-3 h-3" />
-                      <span>Terima di Kontainer</span>
-                    </button>
+                    {canReceiveReturn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedReturn(item);
+                          setShowReceiveModal(true);
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-[11px] border border-cyan-500/40 flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <CheckCircle className="w-3 h-3" />
+                        <span>Terima di Kontainer</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -688,17 +707,19 @@ export const UsedPartReturnsPage: React.FC = () => {
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedReturn(item);
-                        setShowTransferModal(true);
-                      }}
-                      className="flex-1 py-1.5 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] border border-blue-500/40 flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <ArrowRight className="w-3 h-3" />
-                      <span>Kirim ke Gudang Utama</span>
-                    </button>
+                    {canTransferReturn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedReturn(item);
+                          setShowTransferModal(true);
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] border border-blue-500/40 flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <ArrowRight className="w-3 h-3" />
+                        <span>Kirim ke Gudang Utama</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -765,17 +786,19 @@ export const UsedPartReturnsPage: React.FC = () => {
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedReturn(item);
-                        setShowCompleteModal(true);
-                      }}
-                      className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[11px] border border-emerald-500/40 flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <Archive className="w-3 h-3" />
-                      <span>Selesaikan / Disposisi</span>
-                    </button>
+                    {canCompleteReturn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedReturn(item);
+                          setShowCompleteModal(true);
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-[11px] border border-emerald-500/40 flex items-center justify-center gap-1 transition-colors"
+                      >
+                        <Archive className="w-3 h-3" />
+                        <span>Selesaikan / Disposisi</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))

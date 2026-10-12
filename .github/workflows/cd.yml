@@ -1,0 +1,182 @@
+name: CD - Deploy Production
+
+# Continuous Delivery:
+#  - Otomatis setelah workflow "CI" sukses pada branch main
+#  - Manual (workflow_dispatch) untuk redeploy / rollback ke tag tertentu
+#
+# Pipeline: build image -> push GHCR (tag: sha + latest) -> SSH ke VPS
+#           -> docker compose pull/up -> health check -> auto-rollback bila gagal
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag image yang akan di-deploy (kosongkan = build commit saat ini). Contoh rollback: sha-abc1234"
+        required: false
+        default: ""
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false # jangan batalkan deploy yang sedang berjalan
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  APP_DIR: /opt/logisticqu
+
+jobs:
+  # ===========================================================================
+  # 1. BUILD & PUSH IMAGE KE GHCR
+  # ===========================================================================
+  build:
+    name: Build & push (${{ matrix.service }})
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.image_tag == '')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: backend
+            image: logistikqu-backend
+          - service: frontend
+            image: logistikqu-web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # pada workflow_run, build tepat commit yang lolos CI
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Image name (lowercase)
+        id: img
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Short SHA
+        id: sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "tag=sha-${SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ steps.img.outputs.name }}:${{ steps.sha.outputs.tag }}
+            ${{ steps.img.outputs.name }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha || github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ===========================================================================
+  # 2. DEPLOY KE VPS
+  # ===========================================================================
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    # tetap jalan jika build di-skip (mode rollback dengan image_tag manual)
+    if: >-
+      always() &&
+      (needs.build.result == 'success' ||
+       (needs.build.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.image_tag != ''))
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://logistik.sjsgroup.online
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || '187.77.156.109' }}
+      VPS_USER: ${{ vars.VPS_USER || 'root' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve deploy tag & image names
+        id: meta
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          TAG="${{ inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="sha-${SHA::7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "backend=${REGISTRY}/${OWNER}/logistikqu-backend" >> "$GITHUB_OUTPUT"
+          echo "web=${REGISTRY}/${OWNER}/logistikqu-web" >> "$GITHUB_OUTPUT"
+          echo "Deploying tag: $TAG"
+
+      - name: Setup SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          test -n "$VPS_SSH_KEY" || { echo "::error::Secret VPS_SSH_KEY belum di-set"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          cat >> ~/.ssh/config <<EOF
+          Host vps
+            HostName $VPS_HOST
+            User $VPS_USER
+            IdentityFile ~/.ssh/id_deploy
+            BatchMode yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Upload deploy files
+        run: |
+          ssh vps "mkdir -p $APP_DIR"
+          scp deploy/docker-compose.yml deploy/remote-deploy.sh deploy/logisticqu.conf "vps:$APP_DIR/"
+          ssh vps "chmod +x $APP_DIR/remote-deploy.sh"
+
+      - name: Deploy (pull, up, health check, auto-rollback)
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POSTGRES_PASSWORD: ${{ secrets.PROD_POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.PROD_JWT_SECRET }}
+        run: |
+          # Variabel dikirim via stdin agar secret tidak muncul di argumen proses VPS
+          {
+            printf 'export APP_DIR=%q\n' "$APP_DIR"
+            printf 'export BACKEND_IMAGE=%q\n' "${{ steps.meta.outputs.backend }}"
+            printf 'export WEB_IMAGE=%q\n' "${{ steps.meta.outputs.web }}"
+            printf 'export GHCR_USER=%q\n' "$GHCR_USER"
+            printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN"
+            printf 'export POSTGRES_PASSWORD=%q\n' "$POSTGRES_PASSWORD"
+            printf 'export JWT_SECRET=%q\n' "$JWT_SECRET"
+            printf 'bash %q %q\n' "$APP_DIR/remote-deploy.sh" "${{ steps.meta.outputs.tag }}"
+          } | ssh vps bash -s
+
+      - name: Smoke test public endpoint
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://logistik.sjsgroup.online/ || true)
+            echo "HTTP $code"; [ "$code" = "200" ] && exit 0; sleep 6
+          done
+          echo "::warning::Domain belum merespons 200 (cek DNS/SSL/Nginx gateway)"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### 🚀 Deploy LogisticQu"
+            echo "- Tag: \`${{ steps.meta.outputs.tag }}\`"
+            echo "- Backend: \`${{ steps.meta.outputs.backend }}:${{ steps.meta.outputs.tag }}\`"
+            echo "- Web: \`${{ steps.meta.outputs.web }}:${{ steps.meta.outputs.tag }}\`"
+            echo "- Status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT i.id, i.request_id, i.spare_part_id, p.part_name,\n                   i.requested_qty, i.recommended_qty, i.verified_qty,\n                   i.approved_qty, i.shipped_qty, i.received_qty,\n                   p.unit_of_measure, i.notes\n            FROM replenishment_request_items i\n            JOIN spare_parts p ON i.spare_part_id = p.id\n            WHERE i.request_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "requested_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "recommended_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "verified_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "approved_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "shipped_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "received_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "ce3aeb675a3641fffef15e78e8d1907abd0b6205177f4db149c3df46b32e3df1"
+}

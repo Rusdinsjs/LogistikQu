@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM warehouse_supply_links WHERE sub_warehouse_id = $1 OR main_warehouse_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f662fe1f8ed27e9eeb3746784a468fdaf0b650cb9b50f0a8ff970dee29de4fdb"
+}

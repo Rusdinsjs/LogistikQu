@@ -10,19 +10,29 @@ export JWT_SECRET="super-secret-jwt-key-vale-indonesia-logisticqu-2026"
 export RUST_LOG=info
 export no_proxy="*"
 export NO_PROXY="*"
+unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY
 
-# Start backend
-./target/debug/logisticqu-backend > /tmp/backend_test.log 2>&1 &
-BACKEND_PID=$!
-echo "Backend started with PID $BACKEND_PID"
-
-cleanup() {
-    echo "Stopping backend PID $BACKEND_PID"
-    kill $BACKEND_PID || true
-}
-trap cleanup EXIT
-
-sleep 2
+# Start backend if not already running
+if curl -s http://127.0.0.1:8080/health | grep -q "OK"; then
+    echo "Using existing running backend on port 8080"
+else
+    BIN="./target/release/logisticqu-backend"
+    [ -f "$BIN" ] || BIN="./target/debug/logisticqu-backend"
+    $BIN > /tmp/backend_test.log 2>&1 &
+    BACKEND_PID=$!
+    echo "Backend started with PID $BACKEND_PID"
+    cleanup() {
+        echo "Stopping backend PID $BACKEND_PID"
+        kill $BACKEND_PID || true
+    }
+    trap cleanup EXIT
+    for i in {1..20}; do
+        if curl -s http://127.0.0.1:8080/health | grep -q "OK"; then
+            break
+        fi
+        sleep 0.5
+    done
+fi
 
 # Check /health
 echo "=== 1. HEALTH CHECK ==="

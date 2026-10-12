@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) FROM stock_movements\n            WHERE ($1::text IS NULL OR warehouse_id = $1)\n              AND ($2::text IS NULL OR spare_part_id = $2)\n              AND ($3::text IS NULL OR movement_type = $3)\n              AND ($4::text IS NULL OR batch_number = $4)\n              AND ($5::text IS NULL OR serial_number = $5)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1306024e05ec539a24bd56a4adfe4091e7ad138b2160139313cea9cc484ba521"
+}

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { inventoryApi, binApi } from '../api';
 import type { InventoryStockItem, StockMovement, WarehouseBinItem } from '../types';
 import * as XLSX from 'xlsx';
+import { StockDetailModal } from '../components/StockDetailModal';
 import {
   Search,
   History,
@@ -18,16 +19,22 @@ import {
   MoveRight,
   Layers,
   Table,
+  Eye,
+  Camera,
+  QrCode as QrIcon,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
-  const { activeWarehouse, activeWarehouseInfo } = useAuth();
+  const { activeWarehouse, activeWarehouseInfo, user } = useAuth();
 
   const [stocks, setStocks] = useState<InventoryStockItem[]>([]);
   const [bins, setBins] = useState<WarehouseBinItem[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'NORMAL' | 'WARNING' | 'CRITICAL'>('ALL');
   const [loading, setLoading] = useState(true);
+
+  // Stock Detail Modal
+  const [detailStockItem, setDetailStockItem] = useState<InventoryStockItem | null>(null);
 
   // Stock Movement Modal
   const [selectedPart, setSelectedPart] = useState<InventoryStockItem | null>(null);
@@ -344,17 +351,19 @@ export const InventoryPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => {
-              setIsImportModalOpen(true);
-              setImportMessage(null);
-              setImportSuccess(false);
-            }}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition-all"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Import Excel Saldo Awal</span>
-          </button>
+          {(user?.role_id === 'SUPER_ADMIN' || user?.permissions.includes('stock.import')) && (
+            <button
+              onClick={() => {
+                setIsImportModalOpen(true);
+                setImportMessage(null);
+                setImportSuccess(false);
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Import Excel Saldo Awal</span>
+            </button>
+          )}
           <button
             onClick={() => {
               fetchStock();
@@ -410,7 +419,8 @@ export const InventoryPage: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-900/80 text-slate-400 border-b border-slate-800">
                   <tr>
-                    <th className="py-3.5 px-4 font-semibold">Part Number</th>
+                    <th className="py-3.5 px-3 font-semibold text-center w-14">Foto</th>
+                    <th className="py-3.5 px-4 font-semibold">Part Number & QR</th>
                     <th className="py-3.5 px-4 font-semibold">Nama Spare Part</th>
                     <th className="py-3.5 px-4 font-semibold text-center">Status</th>
                     <th className="py-3.5 px-4 font-semibold text-right">Saldo On-Hand</th>
@@ -424,22 +434,67 @@ export const InventoryPage: React.FC = () => {
                 <tbody className="divide-y divide-slate-800/60">
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-500">
+                      <td colSpan={10} className="py-8 text-center text-slate-500">
                         Memuat data persediaan kontainer...
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-500">
+                      <td colSpan={10} className="py-8 text-center text-slate-500">
                         Tidak ada suku cadang yang cocok dengan kriteria pencarian.
                       </td>
                     </tr>
                   ) : (
                     filtered.map((item) => (
                       <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-cyan-300">
-                          {item.spare_part_id}
+                        {/* Foto Thumbnail Column */}
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setDetailStockItem(item)}
+                            className="relative group w-11 h-11 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hover:border-cyan-400/80 transition flex items-center justify-center mx-auto shadow-sm"
+                            title="Klik untuk melihat detail & foto stok"
+                          >
+                            {item.photo_url ? (
+                              <img
+                                src={item.photo_url}
+                                alt={item.part_name}
+                                className="w-full h-full object-cover group-hover:scale-110 transition duration-200"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-slate-600 group-hover:text-cyan-400 transition">
+                                <Camera className="w-4 h-4" />
+                              </div>
+                            )}
+                          </button>
                         </td>
+
+                        {/* Part Number & QR Code */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setDetailStockItem(item)}
+                              className="font-mono font-bold text-cyan-300 hover:text-cyan-200 hover:underline transition text-left"
+                              title="Buka detail lengkap suku cadang"
+                            >
+                              {item.spare_part_id}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDetailStockItem(item)}
+                              className="p-1 rounded-md bg-slate-900 border border-slate-800 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-300 transition"
+                              title="Lihat QR Code & Cetak Tag Label"
+                            >
+                              <QrIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Nama Suku Cadang */}
                         <td className="py-3 px-4 text-slate-200">
                           <div className="font-medium">{item.part_name}</div>
                           <div className="text-[10px] text-slate-500 flex gap-2">
@@ -447,6 +502,8 @@ export const InventoryPage: React.FC = () => {
                             {item.category_name && <span>• {item.category_name}</span>}
                           </div>
                         </td>
+
+                        {/* Status */}
                         <td className="py-3 px-4 text-center">
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -458,20 +515,28 @@ export const InventoryPage: React.FC = () => {
                             }`}
                           >
                             {item.status === 'CRITICAL' && '🔴 Kritis'}
-                            {item.status === 'WARNING' && '🟡 Warning'}
+                            {item.status === 'WARNING' && '🟡 Menipis'}
                             {item.status === 'NORMAL' && '🟢 Normal'}
                           </span>
                         </td>
+
+                        {/* Saldo On-Hand */}
                         <td className="py-3 px-4 text-right font-mono font-bold text-sm text-white">
                           {item.qty_on_hand}{' '}
                           <span className="text-[10px] font-normal text-slate-400">{item.unit_of_measure}</span>
                         </td>
+
+                        {/* Min / Max */}
                         <td className="py-3 px-4 text-right font-mono text-slate-400">
                           {item.min_stock} / {item.max_stock}
                         </td>
+
+                        {/* Safety Stock */}
                         <td className="py-3 px-4 text-right font-mono text-slate-400">
                           {item.safety_stock}
                         </td>
+
+                        {/* Lokasi Bin / Rak */}
                         <td className="py-3 px-4">
                           <button
                             type="button"
@@ -484,6 +549,8 @@ export const InventoryPage: React.FC = () => {
                             <MoveRight className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100 transition" />
                           </button>
                         </td>
+
+                        {/* Tipe Kritikal */}
                         <td className="py-3 px-4 text-center">
                           {item.requires_issue_approval ? (
                             <span className="text-[10px] font-semibold text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded">
@@ -493,15 +560,29 @@ export const InventoryPage: React.FC = () => {
                             <span className="text-[10px] text-slate-500">Reguler</span>
                           )}
                         </td>
+
+                        {/* Aksi: Detail & Kartu Stok */}
                         <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => handleOpenMovements(item)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-[11px] font-medium transition-colors"
-                            title="Lihat Buku Besar Mutasi"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                            <span>Kartu Stok</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setDetailStockItem(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold transition shadow-sm"
+                              title="Buka Detail Lengkap, Foto & QR Code Suku Cadang"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Detail</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMovements(item)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-medium transition-colors"
+                              title="Lihat Buku Besar Mutasi"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                              <span>Mutasi</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -771,7 +852,7 @@ export const InventoryPage: React.FC = () => {
                         1. Unduh Template Excel Resmi
                       </h4>
                       <p className="text-[11px] text-slate-400 mt-1">
-                        Format file Excel (.xlsx) dengan kolom standar PT Vale dan contoh data suku cadang.
+                        Format file Excel (.xlsx) dengan kolom standar SJS-VIPO dan contoh data suku cadang.
                       </p>
                     </div>
                     <button
@@ -929,6 +1010,26 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* DETAIL STOCK MODAL */}
+      {detailStockItem && (
+        <StockDetailModal
+          item={detailStockItem}
+          bins={bins}
+          onClose={() => setDetailStockItem(null)}
+          onOpenMovements={(item) => {
+            setDetailStockItem(null);
+            handleOpenMovements(item);
+          }}
+          onOpenRelocate={(partId, partName, currentBin) => {
+            setDetailStockItem(null);
+            openRelocateModal(partId, partName, currentBin);
+          }}
+          onPhotoUpdated={() => {
+            fetchStock();
+          }}
+        />
       )}
     </div>
   );

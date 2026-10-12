@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, transaction_number, warehouse_id, unit_number, mechanic_name, mechanic_id, status\n            FROM issue_transactions\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "transaction_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "mechanic_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "mechanic_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "4de2943113944aed0b39582f280f1172ee9080cdb5603aaa4c4d00ff8cb430a2"
+}

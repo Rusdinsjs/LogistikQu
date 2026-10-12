@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE users\n                SET full_name = COALESCE($1, full_name),\n                    role_id = COALESCE($2, role_id),\n                    is_active = COALESCE($3, is_active),\n                    custom_permissions_enabled = COALESCE($4, custom_permissions_enabled),\n                    password_hash = $5,\n                    updated_at = NOW()\n                WHERE id = $6\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Bool",
+        "Bool",
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7f232a3f5eb4575cb69d5ea5f2fd3527cffb55e959aa97ba14e75f8a8ebad496"
+}

@@ -1,0 +1,144 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.warehouse_id, w.name as warehouse_name,\n                   s.spare_part_id, p.part_name, pc.name as \"category_name?\",\n                   p.brand, p.unit_of_measure, s.qty_on_hand, s.min_stock,\n                   s.max_stock, s.safety_stock, s.rack_location,\n                   p.critical_level, p.requires_issue_approval, p.requires_core_return, s.updated_at,\n                   COALESCE(s.photo_url, p.photo_url) as \"photo_url?\",\n                   COALESCE(p.qr_code, CONCAT('QR-PART-', s.spare_part_id)) as \"qr_code?\",\n                   p.unit_cost as \"unit_cost?\",\n                   CASE\n                       WHEN s.qty_on_hand <= s.min_stock THEN 'CRITICAL'\n                       WHEN s.qty_on_hand <= (s.min_stock * 1.25) THEN 'WARNING'\n                       ELSE 'NORMAL'\n                   END as status\n            FROM inventory_stock s\n            INNER JOIN warehouses w ON s.warehouse_id = w.id\n            INNER JOIN spare_parts p ON s.spare_part_id = p.id\n            LEFT JOIN part_categories pc ON p.category_id = pc.id\n            WHERE s.warehouse_id = $1\n              AND s.deleted_at IS NULL\n              AND w.deleted_at IS NULL\n              AND p.deleted_at IS NULL\n              AND ($2 = '' OR s.spare_part_id ILIKE $3 OR p.part_name ILIKE $3)\n            ORDER BY\n                CASE\n                    WHEN s.qty_on_hand <= s.min_stock THEN 1\n                    WHEN s.qty_on_hand <= (s.min_stock * 1.25) THEN 2\n                    ELSE 3\n                END,\n                s.spare_part_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "warehouse_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "category_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "brand",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "min_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "max_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "safety_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "rack_location",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "critical_level",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "requires_issue_approval",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "requires_core_return",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "photo_url?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "qr_code?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 19,
+        "name": "unit_cost?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 20,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "614ee4e3d746b2f8cc5673127c80ed8cf63dfecb2da0f0d54522773828f2325a"
+}

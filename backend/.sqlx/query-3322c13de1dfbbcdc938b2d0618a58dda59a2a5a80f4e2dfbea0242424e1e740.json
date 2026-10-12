@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM replenishment_requests WHERE status IN ('REQUESTED', 'VERIFIED')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3322c13de1dfbbcdc938b2d0618a58dda59a2a5a80f4e2dfbea0242424e1e740"
+}

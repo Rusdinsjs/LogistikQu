@@ -1,0 +1,181 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                r.id, r.return_number, r.issue_transaction_id, r.spare_part_id,\n                p.part_name, r.qty, r.unit_of_measure, r.unit_number,\n                r.mechanic_name, r.mechanic_id, r.warehouse_id,\n                w.name as warehouse_name, r.status, r.current_holder_type,\n                r.current_holder_name, r.container_received_at, r.container_received_by,\n                uc.full_name as \"container_received_by_name?\", r.container_notes,\n                r.container_photo_url, r.main_received_at, r.main_received_by,\n                um.full_name as \"main_received_by_name?\", r.main_warehouse_id,\n                r.main_notes, r.created_at, r.updated_at\n            FROM used_part_returns r\n            JOIN spare_parts p ON r.spare_part_id = p.id\n            JOIN warehouses w ON r.warehouse_id = w.id\n            LEFT JOIN users uc ON r.container_received_by = uc.id\n            LEFT JOIN users um ON r.main_received_by = um.id\n            WHERE ($1 = '' OR r.warehouse_id = $1)\n              AND ($2 = '' OR r.status = $2)\n              AND ($3 = '' OR r.return_number ILIKE $4 OR r.unit_number ILIKE $4 OR p.part_name ILIKE $4 OR r.mechanic_name ILIKE $4)\n            ORDER BY r.created_at DESC\n            LIMIT 100\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "return_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "issue_transaction_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "mechanic_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "mechanic_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "warehouse_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "current_holder_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "current_holder_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "container_received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "container_received_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "container_received_by_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "container_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "container_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "main_received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "main_received_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "main_received_by_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 23,
+        "name": "main_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 24,
+        "name": "main_notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 26,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "bc3374dda22b26ff90b51ceb79672c833ce505e73eb9bbd9f80d29444c9b1ecf"
+}

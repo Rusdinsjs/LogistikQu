@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE replenishment_requests\n            SET status = 'RETURNED_TO_MAIN_ADMIN', supervisor_notes = $1, updated_at = NOW()\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a446d563d9bef8f24d491487adbd8dea071d130a8644540f00cc0fa4b32493a3"
+}

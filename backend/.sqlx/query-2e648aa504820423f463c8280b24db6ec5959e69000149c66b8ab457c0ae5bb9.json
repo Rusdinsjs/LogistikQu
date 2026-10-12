@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO stock_adjustments (\n                adjustment_number, warehouse_id, reason, notes,\n                status, created_by\n            ) VALUES ($1, $2, $3, $4, 'PENDING_APPROVAL', $5)\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2e648aa504820423f463c8280b24db6ec5959e69000149c66b8ab457c0ae5bb9"
+}

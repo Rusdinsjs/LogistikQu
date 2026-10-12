@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*)\n            FROM stock_adjustments\n            WHERE status = 'PENDING'\n              AND ($1 = TRUE OR warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "802ce61a062af32cd5ba04a9a2e6f8516c95c2f5b81b89535389d0ac7e0c9b71"
+}

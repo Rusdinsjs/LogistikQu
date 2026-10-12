@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(SUM(s.qty_on_hand * COALESCE(p.unit_cost, 0)), 0::numeric) AS \"total_stock_value!\",\n                COUNT(s.id) AS \"total_inventory_items!\",\n                COUNT(DISTINCT s.warehouse_id) AS \"total_warehouses!\",\n                COUNT(s.id) FILTER (WHERE s.qty_on_hand <= s.min_stock) AS \"low_stock_items_count!\"\n            FROM inventory_stock s\n            JOIN spare_parts p ON s.spare_part_id = p.id\n            WHERE ($1 = TRUE OR s.warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_stock_value!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_inventory_items!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_warehouses!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "low_stock_items_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "557169566636c1c5a9c7793b2a336ee67f750520d67cc553d1587600dc919367"
+}

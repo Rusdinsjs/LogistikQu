@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE replenishment_requests\n            SET status = 'APPROVED', supervisor_notes = $1, approved_by = $2,\n                approved_at = NOW(), updated_at = NOW()\n            WHERE id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "87b62340f6f2b93a71fe322486d27f5fc47f19105a695806daba2e8314f6b31b"
+}

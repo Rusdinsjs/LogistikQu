@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, warehouse_id, spare_part_id, movement_type,\n                   qty, balance_after, reference_number, notes,\n                   batch_number, serial_number, bin_id, created_at\n            FROM stock_movements\n            WHERE ($1::text IS NULL OR warehouse_id = $1)\n              AND ($2::text IS NULL OR spare_part_id = $2)\n              AND ($3::text IS NULL OR movement_type = $3)\n              AND ($4::text IS NULL OR batch_number = $4)\n              AND ($5::text IS NULL OR serial_number = $5)\n            ORDER BY created_at DESC\n            LIMIT $6 OFFSET $7\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "movement_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "balance_after",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "reference_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "batch_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "serial_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "bin_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "75fcb842b0ef50518b10e9514e6d2dec6e506dd28a1104a3148ed64c8f70071a"
+}

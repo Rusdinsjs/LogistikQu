@@ -1,136 +1,204 @@
 use crate::{
-    api::{handlers::auth::AppState, middleware::AuthUser},
+    api::{
+        handlers::auth::AppState,
+        middleware::{check_financial_access, check_permission, AuthUser},
+    },
+    application::services::report_service::{
+        MechanicConsumptionReport, SiteConsumptionReport, UnitConsumptionReport,
+    },
+    domain::entities::{
+        ConsumptionTrendReportItem, EquipmentConsumptionReportItem, IssueHistoryReportItem,
+        ReplenishmentEfficiencyReportItem, StockAgingReportItem, StockBalanceReportItem,
+        StockValuationReportItem, WarehousePerformanceReportItem,
+    },
     error::AppError,
 };
-use axum::{extract::State, Json};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::Deserialize;
 
-#[derive(Debug, Serialize)]
-pub struct UnitConsumptionReport {
-    pub unit_number: String,
-    pub unit_name: String,
-    pub unit_type: String,
-    pub total_transactions: i64,
-    pub total_parts_consumed: Decimal,
+#[derive(Debug, Deserialize)]
+pub struct ReportFilterParams {
+    pub warehouse_id: Option<String>,
+    pub site_id: Option<String>,
+    pub unit_number: Option<String>,
+    pub limit: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct SiteConsumptionReport {
-    pub site_id: String,
-    pub site_name: String,
-    pub total_transactions: i64,
-    pub total_parts_consumed: Decimal,
-}
-
-#[derive(Debug, Serialize)]
-pub struct MechanicConsumptionReport {
-    pub mechanic_name: String,
-    pub total_jobs: i64,
-    pub total_parts_installed: Decimal,
-}
+// --- Legacy / Basic Operational Reports ---
 
 pub async fn report_by_unit(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<UnitConsumptionReport>>, AppError> {
-    let rows = sqlx::query!(
-        r#"
-        SELECT
-            t.unit_number,
-            t.unit_name,
-            t.unit_type,
-            COUNT(DISTINCT t.id)::bigint as total_tx,
-            COALESCE(SUM(i.qty), 0) as total_qty
-        FROM issue_transactions t
-        JOIN issue_transaction_items i ON t.id = i.transaction_id
-        WHERE t.status = 'COMPLETED'
-        GROUP BY t.unit_number, t.unit_name, t.unit_type
-        ORDER BY total_qty DESC
-        LIMIT 50
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    let items = rows
-        .into_iter()
-        .map(|r| UnitConsumptionReport {
-            unit_number: r.unit_number,
-            unit_name: r.unit_name,
-            unit_type: r.unit_type,
-            total_transactions: r.total_tx.unwrap_or(0),
-            total_parts_consumed: r.total_qty.unwrap_or(Decimal::ZERO),
-        })
-        .collect();
-
-    Ok(Json(items))
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let reports = state.services.report.report_by_unit().await?;
+    Ok(Json(reports))
 }
 
 pub async fn report_by_site(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<SiteConsumptionReport>>, AppError> {
-    let rows = sqlx::query!(
-        r#"
-        SELECT
-            t.site_id,
-            s.name as site_name,
-            COUNT(DISTINCT t.id)::bigint as total_tx,
-            COALESCE(SUM(i.qty), 0) as total_qty
-        FROM issue_transactions t
-        JOIN sites s ON t.site_id = s.id
-        JOIN issue_transaction_items i ON t.id = i.transaction_id
-        WHERE t.status = 'COMPLETED'
-        GROUP BY t.site_id, s.name
-        ORDER BY total_qty DESC
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    let items = rows
-        .into_iter()
-        .map(|r| SiteConsumptionReport {
-            site_id: r.site_id,
-            site_name: r.site_name,
-            total_transactions: r.total_tx.unwrap_or(0),
-            total_parts_consumed: r.total_qty.unwrap_or(Decimal::ZERO),
-        })
-        .collect();
-
-    Ok(Json(items))
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let reports = state.services.report.report_by_site().await?;
+    Ok(Json(reports))
 }
 
 pub async fn report_by_mechanic(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<MechanicConsumptionReport>>, AppError> {
-    let rows = sqlx::query!(
-        r#"
-        SELECT
-            t.mechanic_name,
-            COUNT(DISTINCT t.id)::bigint as total_jobs,
-            COALESCE(SUM(i.qty), 0) as total_qty
-        FROM issue_transactions t
-        JOIN issue_transaction_items i ON t.id = i.transaction_id
-        WHERE t.status = 'COMPLETED'
-        GROUP BY t.mechanic_name
-        ORDER BY total_qty DESC
-        LIMIT 50
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let reports = state.services.report.report_by_mechanic().await?;
+    Ok(Json(reports))
+}
 
-    let items = rows
-        .into_iter()
-        .map(|r| MechanicConsumptionReport {
-            mechanic_name: r.mechanic_name,
-            total_jobs: r.total_jobs.unwrap_or(0),
-            total_parts_installed: r.total_qty.unwrap_or(Decimal::ZERO),
-        })
-        .collect();
+// --- Phase 11: Enterprise Inventory Reports ---
 
-    Ok(Json(items))
+pub async fn report_stock_balance(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<StockBalanceReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let reports = state
+        .services
+        .report
+        .stock_balance_report(params.warehouse_id.as_deref())
+        .await?;
+    Ok(Json(reports))
+}
+
+pub async fn report_stock_valuation(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<StockValuationReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    check_financial_access(&state.pool, &user).await?;
+    let reports = state
+        .services
+        .report
+        .stock_valuation_report(params.warehouse_id.as_deref())
+        .await?;
+    Ok(Json(reports))
+}
+
+pub async fn report_stock_aging(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<StockAgingReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let mut reports = state
+        .services
+        .report
+        .stock_aging_report(params.warehouse_id.as_deref())
+        .await?;
+    if !user.can_access_financials() {
+        for r in &mut reports {
+            r.unit_cost = Decimal::ZERO;
+            r.total_value = Decimal::ZERO;
+        }
+    }
+    Ok(Json(reports))
+}
+
+// --- Phase 11: Enterprise Operational Reports ---
+
+pub async fn report_issue_history(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<IssueHistoryReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let mut reports = state
+        .services
+        .report
+        .issue_history_report(
+            params.warehouse_id.as_deref(),
+            params.unit_number.as_deref(),
+            params.limit,
+        )
+        .await?;
+    if !user.can_access_financials() {
+        for r in &mut reports {
+            r.unit_price = Decimal::ZERO;
+            r.total_price = Decimal::ZERO;
+        }
+    }
+    Ok(Json(reports))
+}
+
+pub async fn report_consumption_trend(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<ConsumptionTrendReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let mut reports = state
+        .services
+        .report
+        .consumption_trend_report(params.warehouse_id.as_deref())
+        .await?;
+    if !user.can_access_financials() {
+        for r in &mut reports {
+            r.total_value = Decimal::ZERO;
+        }
+    }
+    Ok(Json(reports))
+}
+
+pub async fn report_equipment_consumption(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<EquipmentConsumptionReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let mut reports = state
+        .services
+        .report
+        .equipment_consumption_report(params.site_id.as_deref(), params.unit_number.as_deref())
+        .await?;
+    if !user.can_access_financials() {
+        for r in &mut reports {
+            r.total_cost = Decimal::ZERO;
+            r.cost_per_hm = Decimal::ZERO;
+        }
+    }
+    Ok(Json(reports))
+}
+
+// --- Phase 11: Enterprise Management Reports ---
+
+pub async fn report_warehouse_performance(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+) -> Result<Json<Vec<WarehousePerformanceReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let mut reports = state.services.report.warehouse_performance_report().await?;
+    if !user.can_access_financials() {
+        for r in &mut reports {
+            r.total_valuation = Decimal::ZERO;
+        }
+    }
+    Ok(Json(reports))
+}
+
+pub async fn report_replenishment_efficiency(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
+) -> Result<Json<Vec<ReplenishmentEfficiencyReportItem>>, AppError> {
+    check_permission(&state.pool, &user, "reports.view").await?;
+    let reports = state
+        .services
+        .report
+        .replenishment_efficiency_report(params.warehouse_id.as_deref())
+        .await?;
+    Ok(Json(reports))
 }

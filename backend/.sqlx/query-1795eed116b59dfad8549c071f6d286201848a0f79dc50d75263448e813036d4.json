@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO mobile_sync_conflicts \n                (device_id, transaction_id, transaction_type, spare_part_id, warehouse_id, server_stock, client_stock, requested_qty, status)\n                VALUES ($1, $2, 'ISSUE', $3, $4, $5, $6, $7, 'CONFLICT_PENDING')\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Numeric",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1795eed116b59dfad8549c071f6d286201848a0f79dc50d75263448e813036d4"
+}

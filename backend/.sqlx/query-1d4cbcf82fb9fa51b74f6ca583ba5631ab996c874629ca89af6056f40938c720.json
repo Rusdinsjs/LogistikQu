@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COUNT(t.id)::bigint as tx_count,\n                COALESCE(SUM(i.qty), 0) as total_qty\n            FROM issue_transactions t\n            LEFT JOIN issue_transaction_items i ON t.id = i.transaction_id\n            WHERE t.warehouse_id = $1\n              AND t.created_at >= CURRENT_DATE\n              AND t.status = 'COMPLETED'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "tx_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_qty",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "1d4cbcf82fb9fa51b74f6ca583ba5631ab996c874629ca89af6056f40938c720"
+}

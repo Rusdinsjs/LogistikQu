@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO equipment (id, unit_number, equipment_number, name, equipment_type_id, serial_number, current_hm_km, current_site_id, is_active)\n            VALUES ($1, $2, $2, $3, $4, $5, $6, $7, TRUE)\n            RETURNING id, unit_number, equipment_number, ct_number, name, equipment_type_id, model, serial_number, current_hm_km, current_site_id, qr_code, is_active\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "equipment_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "ct_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "equipment_type_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "model",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "serial_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "current_hm_km",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "current_site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "qr_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "is_active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "6f600cd96b19bf835293c444613f86b51cc9a417a669aedceafde13c33f6730b"
+}

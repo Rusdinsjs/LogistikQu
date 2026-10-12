@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'logisticqu-backend'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['logisticqu-backend:8080', 'host.docker.internal:8080']
+        labels:
+          environment: 'production'
+          app: 'logisticqu-wms'
+          site: 'sjs-vipo-mining'

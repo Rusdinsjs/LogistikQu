@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.drop_number, d.main_warehouse_id, d.container_warehouse_id,\n                   d.status, d.shipped_at, d.notes, r.request_number\n            FROM main_warehouse_drops d\n            JOIN replenishment_requests r ON d.request_id = r.id\n            WHERE d.container_warehouse_id = $1 AND d.status = 'IN_TRANSIT'\n            ORDER BY d.shipped_at DESC\n            LIMIT 20\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "drop_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "main_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "container_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "shipped_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "request_number",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "10b9f9555cda3df6ea2706fa2cf84dd1b072312f4fbe37d699474b2122796f84"
+}

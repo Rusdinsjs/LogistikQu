@@ -1,13 +1,15 @@
 mod api;
+mod application;
 mod config;
 mod domain;
 mod error;
 mod infrastructure;
 
 use api::{build_router, handlers::auth::AppState};
+use application::ServiceContainer;
 use config::AppConfig;
 use infrastructure::db::create_db_pool;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -28,10 +30,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Konfigurasi loaded. Database: {}", config.database_url);
 
     let pool = create_db_pool(&config.database_url).await?;
+    let services = Arc::new(ServiceContainer::new(pool.clone(), config.clone()));
 
     let state = AppState {
         pool,
         config: config.clone(),
+        services,
     };
 
     let cors = CorsLayer::new()
@@ -40,6 +44,9 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     let app = build_router(state)
+        .layer(axum::middleware::from_fn(
+            api::middleware::security_headers_middleware,
+        ))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

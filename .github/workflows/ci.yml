@@ -1,0 +1,198 @@
+name: CI
+
+# Continuous Integration: dijalankan pada setiap Pull Request & push ke main.
+# Jika sukses di branch main, workflow "CD - Deploy Production" otomatis berjalan.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: "true" # query! macros diverifikasi dari backend/.sqlx (tanpa DB saat compile)
+
+jobs:
+  # ===========================================================================
+  # 1. BACKEND - format, clippy, unit tests, build binary
+  # ===========================================================================
+  backend:
+    name: Backend (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        # TODO: ubah ke `-- -D warnings` setelah warning yang ada dibersihkan
+        run: cargo clippy --all-targets --locked
+
+      - name: Unit tests
+        run: cargo test --locked
+
+      - name: Build backend binary
+        run: cargo build --locked --bin logisticqu-backend
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-bin
+          path: backend/target/debug/logisticqu-backend
+          retention-days: 1
+
+  # ===========================================================================
+  # 2. SQLX OFFLINE METADATA - pastikan backend/.sqlx sinkron dengan migrasi
+  # ===========================================================================
+  sqlx-check:
+    name: SQLx offline metadata up-to-date
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: logisticqu_dev
+          POSTGRES_USER: logisticqu
+          POSTGRES_PASSWORD: logisticqu_secret
+        ports: ["5440:5432"]
+        options: >-
+          --health-cmd "pg_isready -U logisticqu" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: sqlx-cli
+      - name: Apply migrations
+        working-directory: backend
+        run: sqlx migrate run
+      - name: Verify .sqlx (jalankan `cargo sqlx prepare -- --all-targets` jika gagal)
+        working-directory: backend
+        env:
+          SQLX_OFFLINE: "false"
+        run: cargo sqlx prepare --check -- --all-targets
+
+  # ===========================================================================
+  # 3. FRONTEND - lint, typecheck, unit tests, build
+  # ===========================================================================
+  frontend:
+    name: Frontend (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - name: Lint (oxlint)
+        run: pnpm lint
+      - name: Unit tests
+        run: pnpm test
+      - name: Typecheck & build
+        run: pnpm build
+
+  # ===========================================================================
+  # 4. INTEGRATION - backend nyata + PostgreSQL fresh + skrip API test
+  # ===========================================================================
+  integration:
+    name: Integration / API tests
+    needs: backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: logisticqu_dev
+          POSTGRES_USER: logisticqu
+          POSTGRES_PASSWORD: logisticqu_secret
+        ports: ["5440:5432"]
+        options: >-
+          --health-cmd "pg_isready -U logisticqu" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev
+      PORT: "8080"
+      JWT_SECRET: super-secret-jwt-key-vale-indonesia-logisticqu-2026
+      RUST_LOG: info
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-bin
+          path: backend/target/debug
+
+      - name: Start backend (migrasi + seed otomatis)
+        run: |
+          chmod +x backend/target/debug/logisticqu-backend
+          cd backend
+          nohup ./target/debug/logisticqu-backend > /tmp/backend.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fs http://127.0.0.1:8080/health && exit 0
+            sleep 1
+          done
+          echo "Backend gagal start"; cat /tmp/backend.log; exit 1
+
+      - name: Run API test suites
+        run: bash deploy/ci/run-integration-tests.sh
+
+      - name: Backend log
+        if: always()
+        run: tail -n 200 /tmp/backend.log || true
+
+  # ===========================================================================
+  # 5. DOCKER BUILD (validasi Dockerfile pada PR, tanpa push)
+  # ===========================================================================
+  docker:
+    name: Docker build (${{ matrix.service }})
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

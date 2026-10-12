@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO warehouse_bins (warehouse_id, bin_code, zone, shelf_level, capacity_parts)\n                VALUES ($1, $2, 'BAY-GENERAL', 'LEVEL-1', 10)\n                ON CONFLICT (warehouse_id, bin_code) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9574ea70a0e376bc8d10b3419ec63456d030167e6a7d20cdacf74bcdf21a4cd"
+}

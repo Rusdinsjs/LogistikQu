@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT permission_id\n                FROM role_permissions\n                WHERE role_id = $1\n                ORDER BY permission_id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8774363f057030fb4e72bc2c118764f53f737f4b431f691febbcccee5366a7d9"
+}

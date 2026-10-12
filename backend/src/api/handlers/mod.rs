@@ -11,3 +11,7 @@ pub mod returns;
 pub mod sync;
 
 pub mod bins;
+pub mod dashboard;
+pub mod maintenance;
+pub mod metrics;
+pub mod notifications;

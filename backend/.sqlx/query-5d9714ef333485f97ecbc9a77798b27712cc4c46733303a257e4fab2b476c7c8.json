@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, drop_number, request_id, main_warehouse_id,\n                   container_warehouse_id, status, dropped_by, received_by,\n                   shipped_at, received_at, notes\n            FROM main_warehouse_drops\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "drop_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "main_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "container_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "dropped_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "received_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "shipped_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "5d9714ef333485f97ecbc9a77798b27712cc4c46733303a257e4fab2b476c7c8"
+}

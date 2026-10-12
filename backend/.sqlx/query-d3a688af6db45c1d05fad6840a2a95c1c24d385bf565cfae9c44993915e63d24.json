@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM inventory_stock WHERE qty_on_hand > min_stock AND qty_on_hand <= (min_stock * 1.25) AND deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d3a688af6db45c1d05fad6840a2a95c1c24d385bf565cfae9c44993915e63d24"
+}

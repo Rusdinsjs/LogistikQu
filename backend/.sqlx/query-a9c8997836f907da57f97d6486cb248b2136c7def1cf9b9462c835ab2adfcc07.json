@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(qty), 0::numeric)\n            FROM stock_movements\n            WHERE movement_type IN ('ISSUE', 'DAMAGE', 'LOST')\n              AND created_at >= NOW() - INTERVAL '30 days'\n              AND ($1 = TRUE OR warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "coalesce",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a9c8997836f907da57f97d6486cb248b2136c7def1cf9b9462c835ab2adfcc07"
+}

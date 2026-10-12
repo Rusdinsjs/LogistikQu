@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE main_warehouse_drops SET status = 'COMPLETED', received_by = $1, received_at = NOW() WHERE request_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39b996d7074f74e2cddf58c95d3536e354c83b846980cb5da5ce35db571cc667"
+}

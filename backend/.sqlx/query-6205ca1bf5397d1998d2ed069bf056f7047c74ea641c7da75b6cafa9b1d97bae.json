@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO issue_transactions\n            (id, transaction_number, warehouse_id, site_id, receiver_name, unit_number, unit_name, unit_type,\n             hm_km, mechanic_name, work_order_number, maintenance_type, priority, status, device_id, client_uuid, created_by)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'CORRECTIVE', 'NORMAL', 'COMPLETED', $12, $13, $14)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6205ca1bf5397d1998d2ed069bf056f7047c74ea641c7da75b6cafa9b1d97bae"
+}

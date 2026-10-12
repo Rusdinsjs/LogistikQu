@@ -1,0 +1,98 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, username, action, entity, entity_id,\n                   old_value, new_value, old_values, new_values,\n                   ip_address, user_agent, timestamp as \"timestamp!\", created_at\n            FROM audit_logs\n            ORDER BY timestamp DESC\n            LIMIT 100\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "action",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "entity",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "old_value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "new_value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "old_values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "new_values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 10,
+        "name": "ip_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "user_agent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "timestamp!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5d03b4d3a393015d9da83b4400b510a4a3ca9ea996fb832136f00584f48c29ff"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE warehouses\n            SET deleted_at = NOW(), is_active = FALSE\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e96b70151c843e7eed99d194f92788d3c9e6499dd813f905dd3759fed5cf994"
+}

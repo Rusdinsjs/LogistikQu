@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO stock_adjustment_items (\n                    adjustment_id, spare_part_id, qty_system, qty_physical, difference\n                ) VALUES ($1, $2, $3, $4, $5)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Numeric",
+        "Numeric",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "548b5924a5a6006d21c933c4784d543113dfbe8dfc6c3eab392d1dd9fc4c0adb"
+}

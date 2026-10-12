@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.spare_part_id,\n                p.part_name,\n                c.name as category_name,\n                s.warehouse_id,\n                w.name as warehouse_name,\n                s.rack_location,\n                s.qty_on_hand,\n                s.min_stock,\n                s.max_stock,\n                s.safety_stock,\n                p.unit_of_measure,\n                CASE\n                    WHEN s.qty_on_hand <= s.min_stock THEN 'CRITICAL'\n                    WHEN s.qty_on_hand <= (s.min_stock * 1.2) THEN 'WARNING'\n                    ELSE 'NORMAL'\n                END as status\n            FROM inventory_stock s\n            JOIN spare_parts p ON s.spare_part_id = p.id\n            JOIN warehouses w ON s.warehouse_id = w.id\n            LEFT JOIN part_categories c ON p.category_id = c.id\n            WHERE ($1::text IS NULL OR s.warehouse_id = $1)\n            ORDER BY s.warehouse_id, s.spare_part_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "warehouse_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "rack_location",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "min_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "max_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "safety_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "674b515e53a481063b99a9a6de799286811eb24f973ce705d31df819ed04f0cf"
+}

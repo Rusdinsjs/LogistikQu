@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.warehouse_id, s.spare_part_id, s.spare_part_id as part_number, p.part_name,\n                   p.unit_of_measure as uom, s.qty_on_hand, \n                   b.bin_code as \"bin_code?\", \n                   b.zone as \"zone?\", \n                   b.shelf_level as \"shelf_level?\",\n                   s.batch_number as \"batch_number?\", \n                   s.serial_number as \"serial_number?\",\n                   CASE \n                     WHEN s.qty_on_hand <= 0 THEN 'CRITICAL'\n                     WHEN s.qty_on_hand <= p.default_min_stock THEN 'LOW'\n                     ELSE 'NORMAL'\n                   END as \"status!\"\n            FROM inventory_stock s\n            JOIN spare_parts p ON s.spare_part_id = p.id\n            LEFT JOIN warehouse_bins b ON s.bin_id = b.id\n            WHERE s.warehouse_id = $1 AND (s.deleted_at IS NULL)\n            ORDER BY p.part_name ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "part_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "uom",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "bin_code?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "zone?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "shelf_level?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "batch_number?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "serial_number?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "dfcfc0535661c0da795bc1b903ca8a748367ff25437a883670be9df4685c081c"
+}

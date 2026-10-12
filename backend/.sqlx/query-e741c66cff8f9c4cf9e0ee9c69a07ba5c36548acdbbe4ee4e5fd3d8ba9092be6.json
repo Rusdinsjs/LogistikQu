@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*)\n            FROM replenishment_requests\n            WHERE status IN ('REQUESTED', 'VERIFIED')\n              AND ($1 = TRUE OR container_warehouse_id = ANY($2) OR main_warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e741c66cff8f9c4cf9e0ee9c69a07ba5c36548acdbbe4ee4e5fd3d8ba9092be6"
+}

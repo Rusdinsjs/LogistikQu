@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.spare_part_id,\n                p.part_name,\n                c.name as category_name,\n                p.unit_of_measure,\n                s.qty_on_hand,\n                s.min_stock,\n                s.max_stock,\n                s.safety_stock,\n                p.lead_time_days,\n                COALESCE((\n                    SELECT SUM(rri.shipped_qty)\n                    FROM replenishment_requests rr\n                    JOIN replenishment_request_items rri ON rr.id = rri.request_id\n                    WHERE rr.container_warehouse_id = s.warehouse_id\n                      AND rr.status = 'IN_TRANSIT'\n                      AND rri.spare_part_id = s.spare_part_id\n                ), 0::numeric) as in_transit_qty,\n                COALESCE((\n                    SELECT SUM(i.qty)\n                    FROM issue_transaction_items i\n                    JOIN issue_transactions t ON i.transaction_id = t.id\n                    WHERE i.spare_part_id = s.spare_part_id\n                      AND t.warehouse_id = s.warehouse_id\n                      AND t.created_at >= NOW() - INTERVAL '7 days'\n                ), 0::numeric) as usage_7d,\n                COALESCE((\n                    SELECT SUM(i.qty)\n                    FROM issue_transaction_items i\n                    JOIN issue_transactions t ON i.transaction_id = t.id\n                    WHERE i.spare_part_id = s.spare_part_id\n                      AND t.warehouse_id = s.warehouse_id\n                      AND t.created_at >= NOW() - INTERVAL '30 days'\n                ), 0::numeric) as usage_30d,\n                COALESCE((\n                    SELECT SUM(i.qty)\n                    FROM issue_transaction_items i\n                    JOIN issue_transactions t ON i.transaction_id = t.id\n                    WHERE i.spare_part_id = s.spare_part_id\n                      AND t.warehouse_id = s.warehouse_id\n                      AND t.created_at >= NOW() - INTERVAL '60 days'\n                      AND t.created_at < NOW() - INTERVAL '30 days'\n                ), 0::numeric) as usage_prior_30d,\n                COALESCE((\n                    SELECT SUM(i.qty)\n                    FROM issue_transaction_items i\n                    JOIN issue_transactions t ON i.transaction_id = t.id\n                    WHERE i.spare_part_id = s.spare_part_id\n                      AND t.warehouse_id = s.warehouse_id\n                      AND t.created_at >= NOW() - INTERVAL '90 days'\n                ), 0::numeric) as usage_90d\n            FROM inventory_stock s\n            JOIN spare_parts p ON s.spare_part_id = p.id\n            LEFT JOIN part_categories c ON p.category_id = c.id\n            WHERE s.warehouse_id = $1\n            ORDER BY\n                CASE WHEN s.qty_on_hand <= s.min_stock THEN 1 ELSE 2 END,\n                s.qty_on_hand ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "min_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "max_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "safety_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "lead_time_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "in_transit_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "usage_7d",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "usage_30d",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "usage_prior_30d",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 13,
+        "name": "usage_90d",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dad200dec71f8f3e6bb01ca89f1f5845e2a36de5dd483d807e366852c392bda8"
+}

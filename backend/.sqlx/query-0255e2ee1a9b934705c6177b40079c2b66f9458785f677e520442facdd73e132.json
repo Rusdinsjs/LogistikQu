@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE replenishment_request_items\n                SET received_qty = approved_qty\n                WHERE request_id = $1 AND spare_part_id = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0255e2ee1a9b934705c6177b40079c2b66f9458785f677e520442facdd73e132"
+}

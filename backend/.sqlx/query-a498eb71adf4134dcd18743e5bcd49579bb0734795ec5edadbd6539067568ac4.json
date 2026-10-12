@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT rp.permission_id\n                FROM users u\n                JOIN role_permissions rp ON u.role_id = rp.role_id\n                WHERE u.id = $1\n                ORDER BY rp.permission_id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a498eb71adf4134dcd18743e5bcd49579bb0734795ec5edadbd6539067568ac4"
+}

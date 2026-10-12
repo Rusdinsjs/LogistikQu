@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id AS spare_part_id,\n                p.part_name,\n                c.name AS \"category_name?\",\n                p.unit_of_measure,\n                COALESCE(SUM(s.qty_on_hand), 0::numeric) AS \"current_stock!\",\n                COALESCE(p.unit_cost, 0::numeric) AS \"unit_cost!\",\n                COALESCE(SUM(s.qty_on_hand * COALESCE(p.unit_cost, 0)), 0::numeric) AS \"total_value!\",\n                COALESCE((\n                    SELECT SUM(iti.qty)\n                    FROM issue_transaction_items iti\n                    JOIN issue_transactions it ON iti.transaction_id = it.id\n                    WHERE iti.spare_part_id = p.id\n                      AND it.created_at >= NOW() - INTERVAL '30 days'\n                      AND ($1 = TRUE OR it.warehouse_id = ANY($2))\n                ), 0::numeric) AS \"total_issued_30d!\",\n                COALESCE((\n                    SELECT COUNT(DISTINCT it.id)\n                    FROM issue_transaction_items iti\n                    JOIN issue_transactions it ON iti.transaction_id = it.id\n                    WHERE iti.spare_part_id = p.id\n                      AND it.created_at >= NOW() - INTERVAL '30 days'\n                      AND ($1 = TRUE OR it.warehouse_id = ANY($2))\n                ), 0::bigint) AS \"issue_frequency!\",\n                COALESCE(\n                    EXTRACT(DAY FROM NOW() - (\n                        SELECT MAX(created_at)\n                        FROM stock_movements sm\n                        WHERE sm.spare_part_id = p.id\n                          AND ($1 = TRUE OR sm.warehouse_id = ANY($2))\n                    ))::bigint,\n                    999\n                ) AS \"days_since_last_movement!\"\n            FROM spare_parts p\n            LEFT JOIN part_categories c ON p.category_id = c.id\n            JOIN inventory_stock s ON p.id = s.spare_part_id\n            WHERE ($1 = TRUE OR s.warehouse_id = ANY($2))\n              AND p.deleted_at IS NULL\n            GROUP BY p.id, p.part_name, c.name, p.unit_of_measure, p.unit_cost\n            ORDER BY \"total_issued_30d!\" DESC, \"total_value!\" DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "current_stock!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit_cost!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_value!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_issued_30d!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "issue_frequency!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "days_since_last_movement!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b9da4fb8b0e8fc2de18c9cf3092c00916a40289c58a9f0cb2b91ebd407a0a679"
+}

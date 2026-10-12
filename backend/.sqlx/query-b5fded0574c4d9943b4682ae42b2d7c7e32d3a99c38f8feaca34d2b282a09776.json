@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT spare_part_id, qty, unit_of_measure FROM issue_transaction_items\n            WHERE transaction_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b5fded0574c4d9943b4682ae42b2d7c7e32d3a99c38f8feaca34d2b282a09776"
+}

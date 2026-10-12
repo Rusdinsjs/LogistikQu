@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Warehouse, Lock, User, ArrowRight, Shield, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export const LoginPage: React.FC = () => {
   const { login, loading } = useAuth();
@@ -49,7 +50,10 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[#0B1120]">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 relative">
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
         {/* Left Card: Login Form */}
         <div className="glass-panel rounded-2xl p-8 flex flex-col justify-between border border-slate-800 shadow-2xl">
@@ -135,7 +139,7 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div className="mt-8 pt-4 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center">
-            <span>Target: Mining Site IUP PT Vale</span>
+            <span>Target: Mining Site SJS-VIPO</span>
             <span>v1.0.0 Enterprise</span>
           </div>
         </div>

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*)\n            FROM issue_transactions\n            WHERE status = 'PENDING_APPROVAL'\n              AND ($1 = TRUE OR warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "08700ce99e11c49394faf0b0f5b846577e5587e5f237f8bfea758c2724da1eaf"
+}

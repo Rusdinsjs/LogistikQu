@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO main_warehouse_drop_items (drop_id, spare_part_id, qty, unit_of_measure)\n                VALUES ($1, $2, $3, $4)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Numeric",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2778f3fbb604ce561675bad2c33787244abeee2c46fe45ac025e82eb1c77104"
+}

@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { masterApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import type { SparePart, Equipment, Employee, Site, WarehouseInfo, WarehouseCategory } from '../types';
+import {
+  canViewFinancials,
+  type SparePart,
+  type Equipment,
+  type Employee,
+  type Site,
+  type WarehouseInfo,
+  type WarehouseCategory,
+} from '../types';
 import {
   Boxes,
   Truck,
@@ -23,15 +31,17 @@ import {
   Tag,
   GitBranch,
   Box,
+  Camera,
+  QrCode as QrIcon,
 } from 'lucide-react';
+import { QrCodeView } from '../components/common/QrCodeView';
 
 export const MasterPage: React.FC = () => {
   const { user } = useAuth();
+  const hasFinancialAccess = canViewFinancials(user);
   const canManageMaster =
     user?.role_id === 'SUPER_ADMIN' ||
-    user?.role_id === 'MANAGER' ||
-    user?.permissions?.includes('master.manage') ||
-    user?.permissions?.includes('users.manage');
+    user?.permissions?.includes('master.manage');
 
   const [activeTab, setActiveTab] = useState<'parts' | 'equipment' | 'employees' | 'sites' | 'warehouses'>('parts');
   const [search, setSearch] = useState('');
@@ -45,6 +55,10 @@ export const MasterPage: React.FC = () => {
 
   // Toggle Core Return state
   const [updatingPartId, setUpdatingPartId] = useState<string | null>(null);
+
+  // QR Code & Photo preview modal states
+  const [selectedQrPart, setSelectedQrPart] = useState<SparePart | null>(null);
+  const [previewMasterPhoto, setPreviewMasterPhoto] = useState<SparePart | null>(null);
 
   // Add Equipment Modal
   const [showAddUnitModal, setShowAddUnitModal] = useState(false);
@@ -517,7 +531,7 @@ export const MasterPage: React.FC = () => {
           Master Data Operasional Tambang
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Katalog referensi suku cadang (aturan Core Return), armada alat berat, personil mekanik, titik site penambangan, dan konfigurasi gudang PT Vale.
+          Katalog referensi suku cadang (aturan Core Return), armada alat berat, personil mekanik, titik site penambangan, dan konfigurasi gudang SJS-VIPO.
         </p>
       </div>
 
@@ -684,10 +698,12 @@ export const MasterPage: React.FC = () => {
             <table className="w-full text-left text-sm text-slate-300">
               <thead className="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
                 <tr>
-                  <th className="px-5 py-3.5">Part Number</th>
+                  <th className="px-4 py-3.5 text-center w-14">Foto</th>
+                  <th className="px-5 py-3.5">Part Number & QR</th>
                   <th className="px-5 py-3.5">Deskripsi Suku Cadang</th>
                   <th className="px-5 py-3.5">Kategori</th>
                   <th className="px-5 py-3.5">Satuan</th>
+                  {hasFinancialAccess && <th className="px-5 py-3.5 text-right">Harga Satuan (Cost)</th>}
                   <th className="px-5 py-3.5 text-center">Wajib Retur (Core)</th>
                   <th className="px-5 py-3.5 text-center">Critical Part</th>
                 </tr>
@@ -695,20 +711,53 @@ export const MasterPage: React.FC = () => {
               <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-slate-400">
+                    <td colSpan={hasFinancialAccess ? 8 : 7} className="px-5 py-8 text-center text-slate-400">
                       Memuat katalog suku cadang...
                     </td>
                   </tr>
                 ) : spareParts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-slate-500">
+                    <td colSpan={hasFinancialAccess ? 8 : 7} className="px-5 py-8 text-center text-slate-500">
                       Tidak ada suku cadang ditemukan
                     </td>
                   </tr>
                 ) : (
                   spareParts.map((part) => (
                     <tr key={part.id} className="hover:bg-slate-800/30 transition">
-                      <td className="px-5 py-4 font-mono font-bold text-cyan-400">{part.id}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewMasterPhoto(part)}
+                          className="w-10 h-10 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 hover:border-cyan-400 transition flex items-center justify-center mx-auto"
+                          title="Lihat foto suku cadang"
+                        >
+                          {part.photo_url ? (
+                            <img
+                              src={part.photo_url}
+                              alt={part.part_name}
+                              className="w-full h-full object-cover hover:scale-110 transition"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Camera className="w-4 h-4 text-slate-600" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-5 py-4 font-mono font-bold text-cyan-400">
+                        <div className="flex items-center gap-2">
+                          <span>{part.id}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedQrPart(part)}
+                            className="p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 transition"
+                            title="Lihat QR Code & Cetak Tag"
+                          >
+                            <QrIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-5 py-4 font-semibold text-slate-200">{part.part_name}</td>
                       <td className="px-5 py-4 text-xs">
                         <span className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
@@ -718,6 +767,13 @@ export const MasterPage: React.FC = () => {
                       <td className="px-5 py-4 text-xs font-mono text-slate-300">
                         {part.unit_of_measure}
                       </td>
+                      {hasFinancialAccess && (
+                        <td className="px-5 py-4 text-xs font-mono text-right text-emerald-400 font-semibold">
+                          {part.unit_cost !== undefined && part.unit_cost !== null
+                            ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(part.unit_cost)
+                            : '-'}
+                        </td>
+                      )}
                       <td className="px-5 py-4 text-center">
                         <button
                           type="button"
@@ -750,6 +806,60 @@ export const MasterPage: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL QR CODE TAG SUKU CADANG */}
+      {selectedQrPart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-sm rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">QR Code Tag Suku Cadang</h3>
+                <p className="text-xs text-cyan-300 font-mono font-bold mt-0.5">{selectedQrPart.id}</p>
+              </div>
+              <button onClick={() => setSelectedQrPart(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <QrCodeView
+              value={selectedQrPart.qr_code || `QR-PART-${selectedQrPart.id}`}
+              size={170}
+              title={selectedQrPart.id}
+              partName={selectedQrPart.part_name}
+              subtitle={selectedQrPart.category || selectedQrPart.equipment_category || 'General'}
+              warehouseName="Master LogistikQu"
+              rackLocation="KATALOG PUSAT"
+              showActions={true}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* FULL PHOTO PREVIEW MODAL */}
+      {previewMasterPhoto && previewMasterPhoto.photo_url && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/95 backdrop-blur-lg"
+          onClick={() => setPreviewMasterPhoto(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] flex flex-col items-center">
+            <button
+              onClick={() => setPreviewMasterPhoto(null)}
+              className="absolute -top-12 right-0 p-2 rounded-full bg-slate-800 text-white hover:bg-slate-700 transition"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={previewMasterPhoto.photo_url}
+              alt={previewMasterPhoto.part_name}
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-slate-700"
+            />
+            <div className="mt-3 text-center">
+              <span className="font-mono font-bold text-cyan-300">{previewMasterPhoto.id}</span>
+              <span className="mx-2 text-slate-500">•</span>
+              <span className="font-semibold text-white">{previewMasterPhoto.part_name}</span>
+            </div>
           </div>
         </div>
       )}
@@ -858,7 +968,7 @@ export const MasterPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-cyan-400" />
-              <h2 className="text-base font-bold text-white">Daftar Titik Site Penambangan Vale</h2>
+              <h2 className="text-base font-bold text-white">Daftar Titik Site Penambangan SJS-VIPO</h2>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
                 {filteredSites.length} Titik Lokasi
               </span>
@@ -896,7 +1006,7 @@ export const MasterPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-2 line-clamp-2">
-                    {st.description || 'Area penambangan operasional PT Vale Indonesia'}
+                    {st.description || 'Area penambangan operasional SJS-VIPO'}
                   </p>
                 </div>
 
@@ -1072,7 +1182,7 @@ export const MasterPage: React.FC = () => {
                   </div>
 
                   <p className="text-xs text-slate-400 mt-2">
-                    {wh.description || 'Gudang operasional inventori suku cadang pertambangan PT Vale.'}
+                    {wh.description || 'Gudang operasional inventori suku cadang pertambangan SJS-VIPO.'}
                   </p>
                 </div>
 
@@ -1356,7 +1466,7 @@ export const MasterPage: React.FC = () => {
                 <label className="block text-slate-400 mb-1">Deskripsi / Detail Lokasi</label>
                 <textarea
                   rows={3}
-                  placeholder="Area tambang operasional Blok D PT Vale Indonesia..."
+                  placeholder="Area tambang operasional Blok D SJS-VIPO..."
                   value={siteFormDesc}
                   onChange={(e) => setSiteFormDesc(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none resize-none"

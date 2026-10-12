@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(rri.shipped_qty), 0::numeric)\n            FROM replenishment_requests rr\n            JOIN replenishment_request_items rri ON rr.id = rri.request_id\n            WHERE rr.status = 'IN_TRANSIT'\n              AND ($1 = TRUE OR rr.container_warehouse_id = ANY($2) OR rr.main_warehouse_id = ANY($2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "coalesce",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "908cf2434cf72f96541f0b81fa20e7c637fe0a472f1e4b6e16280639d11ac772"
+}

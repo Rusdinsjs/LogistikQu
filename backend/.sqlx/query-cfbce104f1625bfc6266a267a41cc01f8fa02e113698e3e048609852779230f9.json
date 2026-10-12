@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*)\n            FROM notifications\n            WHERE ($2 = 'SUPER_ADMIN' OR user_id = $1 OR recipient_role = $2 OR ($2 = 'SUPERVISOR' AND recipient_role LIKE 'SUPERVISOR%') OR (user_id IS NULL AND recipient_role IS NULL))\n              AND is_read = FALSE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cfbce104f1625bfc6266a267a41cc01f8fa02e113698e3e048609852779230f9"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE inventory_stock\n                    SET qty_on_hand = $1, updated_at = NOW()\n                    WHERE warehouse_id = $2 AND spare_part_id = $3\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Numeric",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9b85bcce82b9d689f315d2c8b11995c5bcaeca3f028abe92b93e5bcecbaf46c"
+}

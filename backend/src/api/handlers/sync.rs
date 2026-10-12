@@ -1,123 +1,63 @@
 use crate::{
     api::{handlers::auth::AppState, middleware::AuthUser},
-    domain::models::{CreateIssueRequest, Equipment, Site, SparePart},
+    application::services::sync_service::{
+        ConflictResolutionRequest, MobileBatchSyncRequest, MobileBatchSyncResponse,
+        MobileDeltaPullResponse,
+    },
     error::AppError,
 };
 use axum::{
     extract::{Query, State},
     Json,
 };
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
-pub struct SyncPullQuery {
-    pub warehouse_id: String,
-    pub since: Option<DateTime<Utc>>,
+pub struct MobilePullQuery {
+    pub warehouse_id: Option<String>,
+    pub last_sync: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct SyncPullResponse {
-    pub server_time: DateTime<Utc>,
-    pub spare_parts: Vec<SparePart>,
-    pub equipment: Vec<Equipment>,
-    pub sites: Vec<Site>,
+/// Batch mobile sync endpoint
+pub async fn mobile_batch_sync_handler(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<MobileBatchSyncRequest>,
+) -> Result<Json<MobileBatchSyncResponse>, AppError> {
+    let res = state
+        .services
+        .sync
+        .process_mobile_batch_sync(payload, user.sub)
+        .await?;
+    Ok(Json(res))
 }
 
-pub async fn sync_pull(
+/// Mobile delta pull endpoint
+pub async fn mobile_delta_pull_handler(
     State(state): State<AppState>,
     _user: AuthUser,
-    Query(_query): Query<SyncPullQuery>,
-) -> Result<Json<SyncPullResponse>, AppError> {
-    let parts = sqlx::query_as!(
-        SparePart,
-        r#"
-        SELECT id, part_name, category_id, brand, equipment_category,
-               unit_of_measure, critical_level, requires_issue_approval,
-               lead_time_days, default_min_stock, default_max_stock, qr_code, is_active,
-               requires_core_return
-        FROM spare_parts
-        WHERE is_active = TRUE
-        ORDER BY id
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    let eq = sqlx::query_as!(
-        Equipment,
-        r#"
-        SELECT id, unit_number, ct_number, name, equipment_type_id,
-               serial_number, current_hm_km, current_site_id, qr_code, is_active
-        FROM equipment
-        WHERE is_active = TRUE
-        ORDER BY unit_number
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    let sites = sqlx::query_as!(
-        Site,
-        r#"
-        SELECT id, name, description, is_active
-        FROM sites
-        WHERE is_active = TRUE
-        ORDER BY name
-        "#
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    Ok(Json(SyncPullResponse {
-        server_time: Utc::now(),
-        spare_parts: parts,
-        equipment: eq,
-        sites,
-    }))
+    Query(query): Query<MobilePullQuery>,
+) -> Result<Json<MobileDeltaPullResponse>, AppError> {
+    let warehouse_id = query.warehouse_id.unwrap_or_else(|| "WH-CONT-HE".into());
+    let res = state
+        .services
+        .sync
+        .pull_delta(&warehouse_id, query.last_sync)
+        .await?;
+    Ok(Json(res))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SyncPushPayload {
-    pub device_id: String,
-    pub transactions: Vec<CreateIssueRequest>,
-}
-
-pub async fn sync_push(
+/// Conflict resolution endpoint
+pub async fn mobile_conflict_resolution_handler(
     State(state): State<AppState>,
-    AuthUser(_user): AuthUser,
-    Json(payload): Json<SyncPushPayload>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<ConflictResolutionRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let mut synched_count = 0;
-    let conflicts: Vec<String> = Vec::new();
-
-    for mut tx in payload.transactions {
-        tx.device_id = Some(payload.device_id.clone());
-
-        // Check idempotency by client_uuid
-        if let Some(client_uuid) = tx.client_uuid {
-            let exists = sqlx::query_scalar!(
-                "SELECT EXISTS(SELECT 1 FROM issue_transactions WHERE client_uuid = $1)",
-                client_uuid
-            )
-            .fetch_one(&state.pool)
-            .await?
-            .unwrap_or(false);
-
-            if exists {
-                continue; // Already processed
-            }
-        }
-
-        // Process transaction using internal logic
-        // For simplicity, count as processed
-        synched_count += 1;
-    }
-
-    Ok(Json(json!({
-        "success": true,
-        "synced_count": synched_count,
-        "conflicts": conflicts
-    })))
+    let res = state
+        .services
+        .sync
+        .resolve_conflict(payload, user.sub)
+        .await?;
+    Ok(Json(res))
 }

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            SELECT r.id, r.request_number, r.container_warehouse_id, r.status\n                            FROM replenishment_requests r\n                            LEFT JOIN main_warehouse_drops d ON d.request_id = r.id\n                            WHERE r.request_number = $1 OR d.drop_number = $1\n                            LIMIT 1\n                            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "container_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a41ca2b96d8fb525e4607854aec2c1195be2b35e48316775ea46e01cfd8bb2fa"
+}

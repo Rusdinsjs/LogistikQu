@@ -10,16 +10,22 @@ export JWT_SECRET="super-secret-jwt-key-vale-indonesia-logisticqu-2026"
 export RUST_LOG=info
 export no_proxy="*"
 export NO_PROXY="*"
+unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY
 
-# Start backend
-./target/debug/logisticqu-backend > /tmp/e2e_backend.log 2>&1 &
-BACKEND_PID=$!
-
-cleanup() {
-    kill $BACKEND_PID || true
-}
-trap cleanup EXIT
-sleep 2
+# Start backend if not already running
+if curl -s http://127.0.0.1:8080/health | grep -q "OK"; then
+    echo "Using existing running backend on port 8080"
+else
+    BIN="./target/release/logisticqu-backend"
+    [ -f "$BIN" ] || BIN="./target/debug/logisticqu-backend"
+    $BIN > /tmp/e2e_backend.log 2>&1 &
+    BACKEND_PID=$!
+    cleanup() {
+        kill $BACKEND_PID || true
+    }
+    trap cleanup EXIT
+    sleep 2
+fi
 
 echo "=== 1. Login as Admin Kontainer HE ==="
 CONT_LOGIN=$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \

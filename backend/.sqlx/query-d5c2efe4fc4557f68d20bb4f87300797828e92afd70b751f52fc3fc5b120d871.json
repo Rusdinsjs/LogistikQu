@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(e.equipment_number, e.unit_number) as \"equipment_number!\",\n                COALESCE(e.equipment_type_id, 'HE') as \"equipment_type!\",\n                COALESCE(e.model, '-') as \"model!\",\n                COALESCE(e.current_site_id, '-') as \"site!\",\n                COALESCE(e.current_hm_km, 0::numeric) as \"current_hm!\",\n                COUNT(DISTINCT t.id)::bigint as \"total_transactions!\",\n                COALESCE(SUM(i.qty), 0::numeric) as \"total_parts_qty!\",\n                COALESCE(SUM(COALESCE(i.total_price, i.qty * COALESCE(p.unit_cost, 0))), 0::numeric) as \"total_cost!\",\n                CASE \n                    WHEN COALESCE(e.current_hm_km, 0) > 0 \n                    THEN ROUND(COALESCE(SUM(COALESCE(i.total_price, i.qty * COALESCE(p.unit_cost, 0))), 0) / e.current_hm_km, 2)\n                    ELSE 0::numeric\n                END as \"cost_per_hm!\"\n            FROM equipment e\n            LEFT JOIN issue_transactions t ON e.unit_number = t.unit_number AND t.status = 'COMPLETED'\n            LEFT JOIN issue_transaction_items i ON t.id = i.transaction_id\n            LEFT JOIN spare_parts p ON i.spare_part_id = p.id\n            WHERE ($1::text IS NULL OR e.current_site_id = $1)\n              AND ($2::text IS NULL OR e.unit_number ILIKE '%' || $2 || '%')\n            GROUP BY e.equipment_number, e.unit_number, e.equipment_type_id, e.model, e.current_site_id, e.current_hm_km\n            ORDER BY \"total_cost!\" DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "equipment_number!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "equipment_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "model!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "site!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "current_hm!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_transactions!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "total_parts_qty!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_cost!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "cost_per_hm!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d5c2efe4fc4557f68d20bb4f87300797828e92afd70b751f52fc3fc5b120d871"
+}

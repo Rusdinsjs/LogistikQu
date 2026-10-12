@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
 echo "=================================================================="
-echo "    🚀 MEMULAI APLIKASI LOGISTICQU WMS (PT VALE INDONESIA)       "
+echo "    🚀 MEMULAI APLIKASI LOGISTICQU WMS (SJS-VIPO)               "
 echo "=================================================================="
 
 # 1. Menentukan Port Backend (8090 agar tidak konflik dengan Docker ERP)
@@ -35,17 +35,15 @@ echo "✅ Database PostgreSQL aktif pada port 5440 (db: logisticqu_dev)"
 # 3. Menyiapkan & Menjalankan Backend Rust Axum
 echo ""
 echo "[2/3] Menjalankan Backend Server (Rust Axum)..."
-BACKEND_BIN="$PROJECT_ROOT/backend/target/debug/logisticqu-backend"
-
-if [ ! -f "$BACKEND_BIN" ]; then
-    echo "🔨 Binary backend belum tersedia. Melakukan kompilasi 'cargo build'..."
-    (cd "$PROJECT_ROOT/backend" && cargo build)
-fi
-
 export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev"
 export JWT_SECRET="logisticqu_super_secret_jwt_key_2026_valesite_mining"
 export SERVER_PORT="$BACKEND_PORT"
 export SERVER_HOST="0.0.0.0"
+
+echo "🔨 Memeriksa & mengompilasi backend (cargo build)..."
+(cd "$PROJECT_ROOT/backend" && cargo build)
+
+BACKEND_BIN="$PROJECT_ROOT/backend/target/debug/logisticqu-backend"
 
 # Matikan proses backend lama jika ada
 pkill -f logisticqu-backend 2>/dev/null || true

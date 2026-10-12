@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO used_part_returns (\n                        return_number, issue_transaction_id, spare_part_id, qty, unit_of_measure,\n                        unit_number, mechanic_name, mechanic_id, warehouse_id,\n                        status, current_holder_type, current_holder_name\n                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING_RETURN', 'MECHANIC', $10)\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid",
+        "Varchar",
+        "Numeric",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "11a6d7ab492e8da397fe4a09931a91037de8322d4eb7aad073f5cac345911be2"
+}

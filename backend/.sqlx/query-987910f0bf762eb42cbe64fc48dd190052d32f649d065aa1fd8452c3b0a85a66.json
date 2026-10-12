@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO replenishment_requests (\n                            request_number, container_warehouse_id, main_warehouse_id,\n                            status, notes, requested_by\n                        ) VALUES ($1, $2, $3, 'REQUESTED', $4, $5)\n                        RETURNING id\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "987910f0bf762eb42cbe64fc48dd190052d32f649d065aa1fd8452c3b0a85a66"
+}

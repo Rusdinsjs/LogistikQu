@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE inventory_stock\n            SET rack_location = $1, updated_at = NOW()\n            WHERE warehouse_id = $2 AND spare_part_id = $3\n            RETURNING qty_on_hand, rack_location\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "rack_location",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "df9ecd7a40acdd3f9e6480e7ce5ca303c75cec0bfc9bc1c91023148587bdc069"
+}

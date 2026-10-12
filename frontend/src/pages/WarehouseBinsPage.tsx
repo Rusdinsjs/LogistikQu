@@ -37,9 +37,7 @@ export const WarehouseBinsPage: React.FC = () => {
   const { activeWarehouse, activeWarehouseInfo, user } = useAuth();
   const canManageBins =
     user?.role_id === 'SUPER_ADMIN' ||
-    user?.role_id === 'MANAGER' ||
-    user?.role_id?.startsWith('SUPERVISOR') ||
-    user?.role_id?.startsWith('CONTAINER_ADMIN') ||
+    user?.permissions?.includes('bins.manage') ||
     user?.permissions?.includes('master.manage');
 
   const [bins, setBins] = useState<WarehouseBinItem[]>([]);
@@ -316,7 +314,7 @@ export const WarehouseBinsPage: React.FC = () => {
             <span className="text-xs text-slate-400">Part Terpetakan</span>
             <div className="text-xl font-bold font-mono text-cyan-300 mt-0.5">{totalPartsStored} Item</div>
           </div>
-          <div className="p-2.5 rounded-xl bg-slate-800 text-cyan-300 border border-slate-700">
+          <div className="p-2.5 rounded-xl bg-blue-950/50 text-blue-400 border border-blue-800/40">
             <Boxes className="w-5 h-5" />
           </div>
         </div>

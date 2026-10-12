@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                b.id, b.warehouse_id, b.bin_code, b.zone, b.shelf_level, b.capacity_parts, b.description, b.is_active, b.created_at,\n                COUNT(s.id) as current_items_count,\n                COALESCE(SUM(s.qty_on_hand), 0) as total_qty,\n                COALESCE(\n                    json_agg(\n                        json_build_object(\n                            'spare_part_id', s.spare_part_id,\n                            'part_name', p.part_name,\n                            'qty_on_hand', s.qty_on_hand,\n                            'unit_of_measure', p.unit_of_measure,\n                            'status', CASE \n                                WHEN s.qty_on_hand <= s.min_stock THEN 'CRITICAL'\n                                WHEN s.qty_on_hand <= s.min_stock * 1.25 THEN 'WARNING'\n                                ELSE 'NORMAL'\n                            END\n                        )\n                    ) FILTER (WHERE s.spare_part_id IS NOT NULL), '[]'::json\n                ) as \"parts!\"\n            FROM warehouse_bins b\n            LEFT JOIN inventory_stock s ON s.warehouse_id = b.warehouse_id AND s.rack_location = b.bin_code\n            LEFT JOIN spare_parts p ON s.spare_part_id = p.id\n            WHERE b.warehouse_id = $1\n            GROUP BY b.id\n            ORDER BY b.zone, b.shelf_level, b.bin_code\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "bin_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "zone",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "shelf_level",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "capacity_parts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "current_items_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "parts!",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "4df33edb07cdf70b000771319cb214f04be1a47eb9e22b8fa78a749c5880873c"
+}

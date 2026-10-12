@@ -26,3 +26,6 @@ rand = "0.8"
 
 [lints.rust]
 dependency_on_unit_never_type_fallback = "allow"
+
+[dev-dependencies]
+rust_decimal_macros = "1.36"

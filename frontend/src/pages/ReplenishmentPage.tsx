@@ -16,6 +16,7 @@ import {
   XCircle,
   Send,
   Boxes,
+  Printer,
 } from 'lucide-react';
 
 export const ReplenishmentPage: React.FC = () => {
@@ -31,6 +32,7 @@ export const ReplenishmentPage: React.FC = () => {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [requestDetail, setRequestDetail] = useState<ReplenishmentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [showPrintStoModal, setShowPrintStoModal] = useState(false);
   
   // Verification edits
   const [verifyItems, setVerifyItems] = useState<{ spare_part_id: string; verified_qty: number; notes?: string }[]>([]);
@@ -91,18 +93,25 @@ export const ReplenishmentPage: React.FC = () => {
     loadSpareParts();
   }, [currentWarehouse, statusFilter]);
 
-  const openDetail = async (id: string) => {
+  const openDetail = async (idOrNumber: string) => {
     try {
-      setSelectedRequestId(id);
       setDetailLoading(true);
-      const data = await replenishmentApi.getRequestDetail(id);
+      let targetId = idOrNumber;
+      const found = requests.find((r) => r.id === idOrNumber || r.request_number === idOrNumber);
+      if (found) {
+        targetId = found.id;
+      }
+      setSelectedRequestId(targetId);
+      const data = await replenishmentApi.getRequestDetail(targetId);
       setRequestDetail(data);
       // init verify items
-      setVerifyItems(data.items.map(it => ({
-        spare_part_id: it.spare_part_id,
-        verified_qty: Number(it.verified_qty || it.requested_qty),
-        notes: it.notes || '',
-      })));
+      setVerifyItems(
+        data.items.map((it) => ({
+          spare_part_id: it.spare_part_id,
+          verified_qty: Number(it.verified_qty || it.requested_qty),
+          notes: it.notes || '',
+        }))
+      );
       setAdminNotes(data.request.admin_notes || '');
       setSupervisorNotes(data.request.supervisor_notes || '');
     } catch (err) {
@@ -111,6 +120,17 @@ export const ReplenishmentPage: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleOpenReplenishment = (e: Event) => {
+      const customEvent = e as CustomEvent<{ requestId?: string }>;
+      if (customEvent.detail?.requestId) {
+        openDetail(customEvent.detail.requestId);
+      }
+    };
+    window.addEventListener('logisticqu:open-replenishment', handleOpenReplenishment);
+    return () => window.removeEventListener('logisticqu:open-replenishment', handleOpenReplenishment);
+  }, [requests]);
 
   const handleVerify = async () => {
     if (!selectedRequestId) return;
@@ -234,27 +254,23 @@ export const ReplenishmentPage: React.FC = () => {
   };
 
   const isMainAdmin =
-    user?.role_id === 'ROLE_ADMIN_UTAMA' ||
-    user?.role_id === 'ADMIN_MAIN' ||
     user?.role_id === 'SUPER_ADMIN' ||
-    user?.role_id === 'MANAGER' ||
     user?.permissions?.includes('request.verify') ||
     false;
 
   const isSupervisor =
-    user?.role_id === 'SUPERVISOR' ||
-    user?.role_id === 'SUPERVISOR_HE' ||
-    user?.role_id === 'SUPERVISOR_DT' ||
-    user?.role_id === 'MANAGER' ||
     user?.role_id === 'SUPER_ADMIN' ||
     user?.permissions?.includes('request.approve') ||
     false;
 
-  const isContainerAdmin =
-    user?.role_id === 'ADMIN_CONTAINER' ||
+  const canCreateRequest =
     user?.role_id === 'SUPER_ADMIN' ||
-    user?.role_id === 'MANAGER' ||
-    user?.role_name?.includes('Kontainer') ||
+    user?.permissions?.includes('request.create') ||
+    false;
+
+  const canReceiveDrop =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('sto.receive') ||
     false;
 
   return (
@@ -272,7 +288,7 @@ export const ReplenishmentPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {currentWarehouse?.warehouse_type === 'CONTAINER' && (
+          {currentWarehouse?.warehouse_type === 'CONTAINER' && canCreateRequest && (
             <button
               onClick={() => {
                 setNewRequestItems([]);
@@ -454,20 +470,21 @@ export const ReplenishmentPage: React.FC = () => {
                     <th className="px-5 py-3.5 text-right">Min / Max</th>
                     <th className="px-5 py-3.5 text-right">Safety Stock</th>
                     <th className="px-5 py-3.5 text-right">Lead Time</th>
-                    <th className="px-5 py-3.5 text-right">Rata-rata Harian (30h)</th>
+                    <th className="px-5 py-3.5 text-right">Reorder Point (ROP)</th>
+                    <th className="px-5 py-3.5 text-right">Tren Permintaan</th>
                     <th className="px-5 py-3.5 text-right font-bold text-cyan-400">Rekomendasi Pesan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="px-5 py-8 text-center text-slate-400">
+                      <td colSpan={9} className="px-5 py-8 text-center text-slate-400">
                         Mengkalkulasi rekomendasi kebutuhan stok...
                       </td>
                     </tr>
                   ) : recommendations.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-5 py-8 text-center text-slate-500">
+                      <td colSpan={9} className="px-5 py-8 text-center text-slate-500">
                         Tidak ada suku cadang terdaftar
                       </td>
                     </tr>
@@ -522,8 +539,25 @@ export const ReplenishmentPage: React.FC = () => {
                           <td className="px-5 py-4 text-right text-xs text-slate-400">
                             {rec.lead_time_days} Hari
                           </td>
-                          <td className="px-5 py-4 text-right text-xs font-mono text-slate-300">
-                            {rec.avg_daily_usage} /hari
+                          <td className="px-5 py-4 text-right text-xs font-mono font-semibold text-purple-300">
+                            {rec.reorder_point !== undefined && rec.reorder_point !== null ? rec.reorder_point : '-'}
+                          </td>
+                          <td className="px-5 py-4 text-right text-xs">
+                            {rec.consumption_trend ? (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-medium ${
+                                  rec.consumption_trend.includes('UPWARD')
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : rec.consumption_trend.includes('DOWNWARD')
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-slate-800 text-slate-300'
+                                }`}
+                              >
+                                {rec.consumption_trend}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-bold">
                             {recQty > 0 ? (
@@ -552,11 +586,26 @@ export const ReplenishmentPage: React.FC = () => {
             {/* Header */}
             <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
               <div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <h3 className="text-lg font-bold text-white font-mono">
                     {requestDetail?.request.request_number || 'Memuat...'}
                   </h3>
                   {requestDetail && getStatusBadge(requestDetail.request.status)}
+                  {requestDetail?.drop && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                      <Truck className="w-3.5 h-3.5" /> STO: {requestDetail.drop.drop_number}
+                    </span>
+                  )}
+                  {(requestDetail?.drop ||
+                    requestDetail?.request.status === 'IN_TRANSIT' ||
+                    requestDetail?.request.status === 'COMPLETED') && (
+                    <button
+                      onClick={() => setShowPrintStoModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 transition shadow-sm"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Cetak Surat Jalan STO
+                    </button>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
                   Kontainer: <strong className="text-slate-200">{requestDetail?.request.container_warehouse_id}</strong> → Gudang Utama: <strong className="text-slate-200">{requestDetail?.request.main_warehouse_id}</strong>
@@ -803,7 +852,7 @@ export const ReplenishmentPage: React.FC = () => {
 
                   {/* Action: Container Admin Confirm Receipt */}
                   {requestDetail.request.status === 'IN_TRANSIT' &&
-                    (isContainerAdmin || isSupervisor) && (
+                    canReceiveDrop && (
                       <button
                         onClick={handleReceive}
                         className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold shadow-lg shadow-emerald-500/20 flex items-center gap-2 transition"
@@ -996,6 +1045,163 @@ export const ReplenishmentPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE SURAT JALAN STO MODAL */}
+      {showPrintStoModal && requestDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm print:p-0 print:bg-white animate-fade-in">
+          <div className="bg-white text-slate-900 max-w-3xl w-full rounded-2xl shadow-2xl p-8 overflow-y-auto max-h-[92vh] print:max-h-none print:shadow-none print:rounded-none print:p-4 print:border-none">
+            {/* Header / Actions (Hidden on Print) */}
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 print:hidden">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-cyan-600" />
+                <h3 className="font-bold text-base text-slate-900">Dokumen Surat Jalan STO Resmi</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg text-xs flex items-center gap-2 shadow-sm transition"
+                >
+                  <Printer className="w-4 h-4" /> Cetak / Print Dokumen
+                </button>
+                <button
+                  onClick={() => setShowPrintStoModal(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-lg text-xs transition"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Document Body */}
+            <div className="space-y-6 text-xs text-slate-800">
+              {/* Kop Surat */}
+              <div className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
+                <div>
+                  <h1 className="text-lg font-black tracking-wider text-slate-950">PT SJS VIPO LOGISTIK</h1>
+                  <p className="text-[11px] text-slate-600 font-medium">Warehouse Management System (LogistikQu)</p>
+                  <p className="text-[10px] text-slate-500">Site Sorowako / Petea Mining Project</p>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block px-3 py-1 bg-slate-100 border border-slate-300 font-black text-xs text-slate-900 rounded mb-1">
+                    SURAT JALAN & TRANSFER ORDER (STO)
+                  </span>
+                  <div className="font-mono font-bold text-sm text-cyan-700">
+                    {requestDetail.drop?.drop_number || `DROP-${requestDetail.request.request_number.replace('REQ-', '')}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata Info */}
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
+                <div>
+                  <div className="text-slate-500 font-medium">Nomor Permohonan Ref:</div>
+                  <div className="font-mono font-bold text-slate-900">{requestDetail.request.request_number}</div>
+                  <div className="text-slate-500 font-medium mt-2">Gudang Pengirim (Asal):</div>
+                  <div className="font-bold text-slate-900">{requestDetail.request.main_warehouse_id}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 font-medium">Tanggal / Waktu Pengiriman:</div>
+                  <div className="font-mono font-bold text-slate-900">
+                    {new Date(requestDetail.drop?.shipped_at || requestDetail.request.updated_at).toLocaleString('id-ID')}
+                  </div>
+                  <div className="text-slate-500 font-medium mt-2">Gudang Penerima (Tujuan):</div>
+                  <div className="font-bold text-slate-900">{requestDetail.request.container_warehouse_id}</div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <table className="w-full text-left border-collapse border border-slate-300 text-xs">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-bold">
+                    <th className="border border-slate-300 px-3 py-2 text-center w-10">No</th>
+                    <th className="border border-slate-300 px-3 py-2">Part Number</th>
+                    <th className="border border-slate-300 px-3 py-2">Nama Spare Part</th>
+                    <th className="border border-slate-300 px-3 py-2 text-center">Satuan</th>
+                    <th className="border border-slate-300 px-3 py-2 text-right">Qty Dikirim</th>
+                    <th className="border border-slate-300 px-3 py-2 text-right">Qty Diterima</th>
+                    <th className="border border-slate-300 px-3 py-2">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requestDetail.items.map((item, idx) => (
+                    <tr key={item.id} className="border border-slate-300">
+                      <td className="border border-slate-300 px-3 py-2 text-center">{idx + 1}</td>
+                      <td className="border border-slate-300 px-3 py-2 font-mono font-bold">{item.spare_part_id}</td>
+                      <td className="border border-slate-300 px-3 py-2">{item.part_name}</td>
+                      <td className="border border-slate-300 px-3 py-2 text-center">{item.unit_of_measure}</td>
+                      <td className="border border-slate-300 px-3 py-2 text-right font-bold text-slate-950">
+                        {item.verified_qty ?? item.requested_qty}
+                      </td>
+                      <td className="border border-slate-300 px-3 py-2 text-right font-bold text-emerald-700">
+                        {item.received_qty ?? '-'}
+                      </td>
+                      <td className="border border-slate-300 px-3 py-2 text-[11px] text-slate-600">{item.notes || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Notes */}
+              {(requestDetail.request.admin_notes || requestDetail.request.supervisor_notes) && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded text-xs space-y-1">
+                  {requestDetail.request.admin_notes && (
+                    <div>
+                      <strong className="text-slate-700">Catatan Admin Gudang Utama:</strong>{' '}
+                      {requestDetail.request.admin_notes}
+                    </div>
+                  )}
+                  {requestDetail.request.supervisor_notes && (
+                    <div>
+                      <strong className="text-slate-700">Catatan Supervisor:</strong>{' '}
+                      {requestDetail.request.supervisor_notes}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Signatures */}
+              <div className="pt-8 grid grid-cols-3 gap-6 text-center text-xs">
+                <div>
+                  <p className="text-slate-500 mb-14">Diserahkan Oleh (Admin Utama):</p>
+                  <div className="border-t border-slate-400 pt-1 font-bold">
+                    ( {requestDetail.request.verified_by || 'Admin Gudang Utama'} )
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Tgl:{' '}
+                    {requestDetail.request.verified_at
+                      ? new Date(requestDetail.request.verified_at).toLocaleDateString('id-ID')
+                      : '...............'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 mb-14">Disetujui Oleh (Supervisor):</p>
+                  <div className="border-t border-slate-400 pt-1 font-bold">
+                    ( {requestDetail.request.approved_by || 'Supervisor Logistik'} )
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Tgl:{' '}
+                    {requestDetail.request.approved_at
+                      ? new Date(requestDetail.request.approved_at).toLocaleDateString('id-ID')
+                      : '...............'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 mb-14">Diterima Oleh (Admin Kontainer):</p>
+                  <div className="border-t border-slate-400 pt-1 font-bold">
+                    ( {requestDetail.request.received_by || 'Admin Kontainer'} )
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Tgl:{' '}
+                    {requestDetail.request.received_at
+                      ? new Date(requestDetail.request.received_at).toLocaleDateString('id-ID')
+                      : '...............'}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

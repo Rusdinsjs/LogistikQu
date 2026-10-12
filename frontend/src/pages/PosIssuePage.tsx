@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 
 export const PosIssuePage: React.FC = () => {
-  const { activeWarehouse, activeWarehouseInfo } = useAuth();
+  const { activeWarehouse, activeWarehouseInfo, user } = useAuth();
+  const canCreateIssue = user?.role_id === 'SUPER_ADMIN' || user?.permissions.includes('issue.create');
 
   // Master data
   const [availableStock, setAvailableStock] = useState<InventoryStockItem[]>([]);
@@ -952,10 +953,14 @@ export const PosIssuePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => executeSubmit(false)}
-                disabled={submitting || cart.length === 0}
+                disabled={submitting || cart.length === 0 || !canCreateIssue}
                 className="w-full mt-4 py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
               >
-                {submitting ? 'Memproses Transaksi...' : 'Konfirmasi & Potong Stok'}
+                {!canCreateIssue
+                  ? 'Tidak Memiliki Izin Input POS'
+                  : submitting
+                  ? 'Memproses Transaksi...'
+                  : 'Konfirmasi & Potong Stok'}
               </button>
             </div>
           </div>

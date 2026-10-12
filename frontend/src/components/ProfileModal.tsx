@@ -463,7 +463,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                  2. Atau Pilih dari Avatar Tambang Vale (Siap Pakai)
+                  2. Atau Pilih dari Avatar Tambang SJS-VIPO (Siap Pakai)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {PRESET_AVATARS.map((preset) => (

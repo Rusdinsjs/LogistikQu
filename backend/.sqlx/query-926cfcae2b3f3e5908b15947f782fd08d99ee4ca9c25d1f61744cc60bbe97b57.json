@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, user_id, recipient_role, recipient_email, recipient_phone,\n                title, message, channel,\n                COALESCE(trigger_type, notification_type, 'LOW_STOCK') AS \"trigger_type!\",\n                reference_id, metadata,\n                is_read, read_at,\n                COALESCE(delivery_status, 'DELIVERED') AS \"delivery_status!\",\n                created_at\n            FROM notifications\n            WHERE ($2 = 'SUPER_ADMIN' OR user_id = $1 OR recipient_role = $2 OR ($2 = 'SUPERVISOR' AND recipient_role LIKE 'SUPERVISOR%') OR (user_id IS NULL AND recipient_role IS NULL))\n              AND ($3::boolean IS NULL OR is_read = $3)\n              AND ($4 = '' OR channel = $4)\n              AND ($5 = '' OR trigger_type = $5)\n            ORDER BY created_at DESC\n            LIMIT $6 OFFSET $7\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "recipient_role",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient_email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "recipient_phone",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "channel",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "trigger_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "reference_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "read_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "delivery_status!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "926cfcae2b3f3e5908b15947f782fd08d99ee4ca9c25d1f61744cc60bbe97b57"
+}

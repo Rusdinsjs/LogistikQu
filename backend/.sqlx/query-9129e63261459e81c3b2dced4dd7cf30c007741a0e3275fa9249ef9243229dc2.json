@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO inventory_stock (warehouse_id, spare_part_id, qty_on_hand, updated_at)\n                VALUES ($1, $2, $3, NOW())\n                ON CONFLICT (warehouse_id, spare_part_id)\n                DO UPDATE SET qty_on_hand = $3, updated_at = NOW()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9129e63261459e81c3b2dced4dd7cf30c007741a0e3275fa9249ef9243229dc2"
+}

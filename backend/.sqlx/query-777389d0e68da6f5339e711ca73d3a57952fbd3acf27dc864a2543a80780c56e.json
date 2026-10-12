@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notifications\n            SET is_read = TRUE, read_at = NOW()\n            WHERE ($2 = 'SUPER_ADMIN' OR user_id = $1 OR recipient_role = $2 OR ($2 = 'SUPERVISOR' AND recipient_role LIKE 'SUPERVISOR%')) AND is_read = FALSE\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "777389d0e68da6f5339e711ca73d3a57952fbd3acf27dc864a2543a80780c56e"
+}

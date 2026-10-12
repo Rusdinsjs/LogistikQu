@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE stock_adjustments\n            SET status = 'APPROVED', approved_by = $1, approved_at = NOW()\n            WHERE id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff599f2e45f30b2510414798f5d738a4766d5975013a6e8cfbb0011361ca7e09"
+}

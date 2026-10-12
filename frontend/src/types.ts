@@ -68,12 +68,25 @@ export interface SparePart {
   qr_code?: string;
   is_active: boolean;
   requires_core_return: boolean;
+  unit_cost?: number;
+  photo_url?: string;
 }
+
+export const canViewFinancials = (user?: UserProfile | null): boolean => {
+  if (!user) return false;
+  return (
+    user.role_id === 'SUPER_ADMIN' ||
+    user.role_id === 'MANAGER' ||
+    (Array.isArray(user.permissions) && user.permissions.includes('financial.view'))
+  );
+};
 
 export interface UpdateSparePartPayload {
   requires_core_return?: boolean;
   requires_issue_approval?: boolean;
   critical_level?: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  photo_url?: string;
+  qr_code?: string;
 }
 
 export interface CreateEquipmentPayload {
@@ -153,6 +166,9 @@ export interface InventoryStockItem {
   requires_core_return: boolean;
   status: 'NORMAL' | 'WARNING' | 'CRITICAL';
   updated_at: string;
+  photo_url?: string;
+  qr_code?: string;
+  unit_cost?: number;
 }
 
 export interface StockMovement {
@@ -238,6 +254,13 @@ export interface RecommendationItem {
   lead_time_days: number;
   avg_daily_usage: number;
   recommended_order_qty: number;
+  reorder_point?: number;
+  in_transit_qty?: number;
+  moving_avg_7d?: number;
+  moving_avg_30d?: number;
+  moving_avg_90d?: number;
+  consumption_trend?: string;
+  seasonal_factor?: number;
 }
 
 export interface ReplenishmentRequest {
@@ -277,6 +300,12 @@ export interface ReplenishmentDetail {
     unit_of_measure: string;
     notes?: string;
   }>;
+  drop?: {
+    id: string;
+    drop_number: string;
+    shipped_at: string;
+    status: string;
+  };
 }
 
 export interface MainDrop {
@@ -343,6 +372,12 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface PermissionItem {
+  id: string;
+  name: string;
+  category: string;
+}
+
 export interface UserManagementItem {
   id: string;
   username: string;
@@ -351,6 +386,8 @@ export interface UserManagementItem {
   role_name: string;
   is_active: boolean;
   warehouses: WarehouseInfo[];
+  custom_permissions_enabled?: boolean;
+  permissions?: string[];
   created_at: string;
 }
 
@@ -358,6 +395,7 @@ export interface RoleItem {
   id: string;
   name: string;
   description: string;
+  permissions: string[];
 }
 
 export interface CreateUserPayload {
@@ -366,6 +404,8 @@ export interface CreateUserPayload {
   full_name: string;
   role_id: string;
   warehouse_ids: string[];
+  custom_permissions_enabled?: boolean;
+  custom_permissions?: string[];
 }
 
 export interface UpdateUserPayload {
@@ -374,6 +414,8 @@ export interface UpdateUserPayload {
   role_id?: string;
   is_active?: boolean;
   warehouse_ids?: string[];
+  custom_permissions_enabled?: boolean;
+  custom_permissions?: string[];
 }
 
 export interface UsedPartReturn {
@@ -459,3 +501,248 @@ export interface UpdateBinPayload {
   description?: string;
   is_active?: boolean;
 }
+
+export interface ReplenishmentIntelligenceItem {
+  spare_part_id: string;
+  part_name: string;
+  category_name?: string;
+  unit_of_measure: string;
+  current_stock: number;
+  in_transit_qty: number;
+  effective_stock: number;
+  min_stock: number;
+  max_stock: number;
+  safety_stock: number;
+  lead_time_days: number;
+  avg_daily_usage: number;
+  moving_avg_7d: number;
+  moving_avg_30d: number;
+  moving_avg_90d: number;
+  consumption_trend: string;
+  trend_percentage: number;
+  seasonal_factor: number;
+  seasonal_description: string;
+  reorder_point: number;
+  is_reorder_needed: boolean;
+  recommended_purchase_qty: number;
+}
+
+export interface EquipmentComponentItem {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface EquipmentMaintenanceRecord {
+  id: string;
+  work_order_number: string;
+  equipment_id: string;
+  unit_number: string;
+  component_id?: string;
+  component_name?: string;
+  spare_part_id?: string;
+  part_name?: string;
+  failure_code: string;
+  failure_symptom: string;
+  maintenance_type: string;
+  hm_km: number;
+  parts_qty: number;
+  parts_cost: number;
+  labor_cost: number;
+  total_cost: number;
+  downtime_hours: number;
+  mechanic_name?: string;
+  performed_at: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface CostPerEquipmentReport {
+  equipment_id: string;
+  unit_number: string;
+  equipment_type_id?: string;
+  model?: string;
+  total_parts_cost: number;
+  total_labor_cost: number;
+  grand_total_cost: number;
+  total_downtime_hours: number;
+  maintenance_count: number;
+  issue_parts_cost: number;
+  combined_total_cost: number;
+}
+
+export interface HierarchicalConsumptionItem {
+  equipment_id: string;
+  unit_number: string;
+  component_id: string;
+  component_name: string;
+  spare_part_id: string;
+  part_name: string;
+  total_qty_consumed: number;
+  total_spend: number;
+  failure_count: number;
+  latest_failure_code?: string;
+  latest_performed_at?: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  user_id?: string;
+  recipient_role?: string;
+  recipient_email?: string;
+  recipient_phone?: string;
+  title: string;
+  message: string;
+  channel: 'IN_APP' | 'EMAIL' | 'WHATSAPP';
+  trigger_type: 'LOW_STOCK' | 'APPROVAL_REQUEST' | 'APPROVAL_COMPLETED' | 'ABNORMAL_CONSUMPTION' | 'REJECTED_TRANSACTION';
+  reference_id?: string;
+  metadata?: any;
+  is_read: boolean;
+  read_at?: string;
+  delivery_status: string;
+  created_at: string;
+}
+
+export interface EnterpriseKpiSummary {
+  total_stock_value: number;
+  total_inventory_items: number;
+  total_in_transit_qty: number;
+  pending_approvals_count: number;
+  stock_in_last_30d: number;
+  stock_out_last_30d: number;
+  total_warehouses: number;
+  low_stock_items_count: number;
+}
+
+export interface FastSlowMovingPartItem {
+  spare_part_id: string;
+  part_name: string;
+  category_name?: string;
+  unit_of_measure: string;
+  current_stock: number;
+  unit_cost: number;
+  total_value: number;
+  total_issued_30d: number;
+  issue_frequency: number;
+  turnover_velocity: 'FAST_MOVING' | 'MODERATE' | 'SLOW_MOVING' | 'NON_MOVING';
+  days_since_last_movement: number;
+}
+
+export interface StockAgingSummary {
+  age_under_30_days_value: number;
+  age_under_30_days_count: number;
+  age_31_to_90_days_value: number;
+  age_31_to_90_days_count: number;
+  age_91_to_180_days_value: number;
+  age_91_to_180_days_count: number;
+  age_over_180_days_value: number;
+  age_over_180_days_count: number;
+}
+
+// --- Phase 11: Enterprise Reports ---
+export interface StockBalanceReportItem {
+  spare_part_id: string;
+  part_name: string;
+  category_name?: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  rack_location?: string;
+  qty_on_hand: number;
+  min_stock: number;
+  max_stock: number;
+  safety_stock: number;
+  unit_of_measure: string;
+  status: 'NORMAL' | 'WARNING' | 'CRITICAL';
+}
+
+export interface StockValuationReportItem {
+  spare_part_id: string;
+  part_name: string;
+  category_name?: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  qty_on_hand: number;
+  unit_cost: number;
+  total_value: number;
+  share_percentage: number;
+}
+
+export interface StockAgingReportItem {
+  spare_part_id: string;
+  part_name: string;
+  warehouse_id: string;
+  warehouse_name: string;
+  qty: number;
+  unit_cost: number;
+  total_value: number;
+  days_in_inventory: number;
+  aging_bucket: '< 30 Hari' | '31-90 Hari' | '91-180 Hari' | '> 180 Hari';
+}
+
+export interface IssueHistoryReportItem {
+  transaction_number: string;
+  issued_at: string;
+  warehouse_id: string;
+  unit_number: string;
+  hm_km?: number;
+  site_id: string;
+  receiver_name: string;
+  mechanic_name: string;
+  work_order_number?: string;
+  spare_part_id: string;
+  part_name: string;
+  qty: number;
+  unit_price: number;
+  total_price: number;
+}
+
+export interface ConsumptionTrendReportItem {
+  period: string;
+  category_name: string;
+  total_transactions: number;
+  total_qty: number;
+  total_value: number;
+}
+
+export interface EquipmentConsumptionReportItem {
+  equipment_number: string;
+  equipment_type: string;
+  model: string;
+  site: string;
+  current_hm: number;
+  total_transactions: number;
+  total_parts_qty: number;
+  total_cost: number;
+  cost_per_hm: number;
+}
+
+export interface WarehousePerformanceReportItem {
+  warehouse_id: string;
+  warehouse_name: string;
+  warehouse_type: string;
+  total_skus: number;
+  total_valuation: number;
+  total_issues_30d: number;
+  total_drops_30d: number;
+  turnover_ratio: number;
+  low_stock_count: number;
+}
+
+export interface ReplenishmentEfficiencyReportItem {
+  request_number: string;
+  container_warehouse_id: string;
+  container_warehouse_name: string;
+  status: string;
+  created_at: string;
+  verified_at?: string;
+  approved_at?: string;
+  received_at?: string;
+  lead_time_hours?: number;
+  items_requested: number;
+  total_qty_requested: number;
+  total_qty_received: number;
+  fulfillment_accuracy_percent: number;
+}
+

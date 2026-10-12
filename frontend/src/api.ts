@@ -28,6 +28,7 @@ import type {
   WarehouseCategory,
   UserManagementItem,
   RoleItem,
+  PermissionItem,
   CreateUserPayload,
   UpdateUserPayload,
   UpdateProfilePayload,
@@ -38,6 +39,23 @@ import type {
   ReceiveContainerReturnPayload,
   TransferMainReturnPayload,
   CompleteReturnPayload,
+  ReplenishmentIntelligenceItem,
+  EquipmentComponentItem,
+  EquipmentMaintenanceRecord,
+  CostPerEquipmentReport,
+  HierarchicalConsumptionItem,
+  NotificationItem,
+  EnterpriseKpiSummary,
+  FastSlowMovingPartItem,
+  StockAgingSummary,
+  StockBalanceReportItem,
+  StockValuationReportItem,
+  StockAgingReportItem,
+  IssueHistoryReportItem,
+  ConsumptionTrendReportItem,
+  EquipmentConsumptionReportItem,
+  WarehousePerformanceReportItem,
+  ReplenishmentEfficiencyReportItem,
 } from './types';
 
 export const api = axios.create({
@@ -170,6 +188,17 @@ export const inventoryApi = {
     const res = await api.post('/inventory/import-initial', { warehouse_id, rows });
     return res.data;
   },
+  getStockDetail: async (warehouse_id: string, spare_part_id: string) => {
+    const res = await api.get<InventoryStockItem>(`/inventory/stock/${warehouse_id}/${spare_part_id}`);
+    return res.data;
+  },
+  updateStockPhoto: async (warehouse_id: string, spare_part_id: string, photo_url: string | null) => {
+    const res = await api.put<{ success: boolean; message: string; photo_url: string | null }>(
+      `/inventory/stock/${warehouse_id}/${spare_part_id}/photo`,
+      { photo_url }
+    );
+    return res.data;
+  },
 };
 
 export const issueApi = {
@@ -202,6 +231,12 @@ export const issueApi = {
 export const replenishmentApi = {
   getRecommendations: async (warehouse_id: string) => {
     const res = await api.get<RecommendationItem[]>('/replenishment/recommendations', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
+  getIntelligence: async (warehouse_id: string) => {
+    const res = await api.get<ReplenishmentIntelligenceItem[]>('/replenishment/intelligence', {
       params: { warehouse_id },
     });
     return res.data;
@@ -285,6 +320,55 @@ export const reportsApi = {
     const res = await api.get<MechanicReport[]>('/reports/consumption-by-mechanic');
     return res.data;
   },
+  // Phase 11: Enterprise Inventory Reports
+  getStockBalance: async (warehouse_id?: string) => {
+    const res = await api.get<StockBalanceReportItem[]>('/reports/inventory/balance', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
+  getStockValuation: async (warehouse_id?: string) => {
+    const res = await api.get<StockValuationReportItem[]>('/reports/inventory/valuation', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
+  getStockAging: async (warehouse_id?: string) => {
+    const res = await api.get<StockAgingReportItem[]>('/reports/inventory/aging', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
+  // Phase 11: Enterprise Operation Reports
+  getIssueHistory: async (params?: { warehouse_id?: string; unit_number?: string; limit?: number }) => {
+    const res = await api.get<IssueHistoryReportItem[]>('/reports/operation/issue-history', {
+      params,
+    });
+    return res.data;
+  },
+  getConsumptionTrend: async (warehouse_id?: string) => {
+    const res = await api.get<ConsumptionTrendReportItem[]>('/reports/operation/consumption', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
+  getEquipmentConsumption: async (params?: { site_id?: string; unit_number?: string }) => {
+    const res = await api.get<EquipmentConsumptionReportItem[]>('/reports/operation/equipment', {
+      params,
+    });
+    return res.data;
+  },
+  // Phase 11: Enterprise Management Reports
+  getWarehousePerformance: async () => {
+    const res = await api.get<WarehousePerformanceReportItem[]>('/reports/management/warehouse-performance');
+    return res.data;
+  },
+  getReplenishmentEfficiency: async (warehouse_id?: string) => {
+    const res = await api.get<ReplenishmentEfficiencyReportItem[]>('/reports/management/replenishment-efficiency', {
+      params: { warehouse_id },
+    });
+    return res.data;
+  },
 };
 
 export const auditApi = {
@@ -301,6 +385,14 @@ export const userApi = {
   },
   listRoles: async () => {
     const res = await api.get<RoleItem[]>('/roles');
+    return res.data;
+  },
+  listPermissions: async () => {
+    const res = await api.get<PermissionItem[]>('/permissions');
+    return res.data;
+  },
+  updateRolePermissions: async (roleId: string, permissions: string[]) => {
+    const res = await api.put<{ success: boolean; message: string }>(`/roles/${roleId}/permissions`, { permissions });
     return res.data;
   },
   createUser: async (payload: CreateUserPayload) => {
@@ -359,6 +451,95 @@ export const binApi = {
       spare_part_id,
       target_bin_code,
     });
+    return res.data;
+  },
+};
+
+export const maintenanceApi = {
+  getComponents: async () => {
+    const res = await api.get<EquipmentComponentItem[]>('/maintenance/components');
+    return res.data;
+  },
+  getHistory: async (params?: { equipment_id?: string; component_id?: string; spare_part_id?: string; failure_code?: string; page?: number; limit?: number }) => {
+    const res = await api.get<EquipmentMaintenanceRecord[]>('/maintenance/history', { params });
+    return res.data;
+  },
+  createLog: async (payload: {
+    work_order_number: string;
+    equipment_id: string;
+    component_id?: string;
+    spare_part_id?: string;
+    failure_code: string;
+    failure_symptom: string;
+    maintenance_type?: string;
+    hm_km: number;
+    parts_qty: number;
+    parts_cost?: number;
+    labor_cost?: number;
+    downtime_hours?: number;
+    mechanic_name?: string;
+    notes?: string;
+  }) => {
+    const res = await api.post<EquipmentMaintenanceRecord>('/maintenance/history', payload);
+    return res.data;
+  },
+  getCostPerEquipment: async () => {
+    const res = await api.get<CostPerEquipmentReport[]>('/maintenance/cost-per-equipment');
+    return res.data;
+  },
+  getConsumptionAnalysis: async (equipment_id?: string) => {
+    const res = await api.get<HierarchicalConsumptionItem[]>('/maintenance/consumption-analysis', {
+      params: { equipment_id },
+    });
+    return res.data;
+  },
+};
+
+export const notificationApi = {
+  getNotifications: async (params?: { is_read?: boolean; channel?: string; trigger_type?: string; page?: number; limit?: number }) => {
+    const res = await api.get<NotificationItem[]>('/notifications', { params });
+    return res.data;
+  },
+  markAsRead: async (id: string) => {
+    const res = await api.put<{ success: boolean }>(`/notifications/${id}/read`);
+    return res.data;
+  },
+  markAllRead: async () => {
+    const res = await api.put<{ success: boolean; marked_count: number }>('/notifications/read-all');
+    return res.data;
+  },
+  getUnreadCount: async () => {
+    const res = await api.get<{ unread_count: number }>('/notifications/unread-count');
+    return res.data;
+  },
+  sendNotification: async (payload: {
+    user_id?: string;
+    recipient_role?: string;
+    recipient_email?: string;
+    recipient_phone?: string;
+    title: string;
+    message: string;
+    channel?: string;
+    trigger_type: string;
+    reference_id?: string;
+    metadata?: any;
+  }) => {
+    const res = await api.post<NotificationItem>('/notifications', payload);
+    return res.data;
+  },
+};
+
+export const dashboardApi = {
+  getEnterpriseKpis: async () => {
+    const res = await api.get<EnterpriseKpiSummary>('/dashboard/enterprise-kpi');
+    return res.data;
+  },
+  getStockVelocity: async () => {
+    const res = await api.get<FastSlowMovingPartItem[]>('/dashboard/stock-velocity');
+    return res.data;
+  },
+  getStockAging: async () => {
+    const res = await api.get<StockAgingSummary>('/dashboard/stock-aging');
     return res.data;
   },
 };

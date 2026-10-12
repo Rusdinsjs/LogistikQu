@@ -14,8 +14,9 @@ impl AppConfig {
     pub fn from_env() -> Self {
         dotenvy::dotenv().ok();
 
-        let database_url = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev".to_string());
+        let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logisticqu_dev".to_string()
+        });
         let jwt_secret = env::var("JWT_SECRET")
             .unwrap_or_else(|_| "logisticqu_super_secret_jwt_key_2026_valesite_mining".to_string());
         let jwt_access_expiry_mins = env::var("JWT_ACCESS_EXPIRY_MINS")

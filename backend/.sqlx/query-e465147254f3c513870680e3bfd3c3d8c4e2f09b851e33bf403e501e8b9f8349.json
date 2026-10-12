@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT qty_on_hand FROM inventory_stock WHERE warehouse_id = $1 AND spare_part_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "qty_on_hand",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e465147254f3c513870680e3bfd3c3d8c4e2f09b851e33bf403e501e8b9f8349"
+}

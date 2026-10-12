@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*)::bigint\n            FROM replenishment_requests\n            WHERE container_warehouse_id = $1\n              AND status IN ('REQUESTED', 'VERIFIED', 'RETURNED_TO_MAIN_ADMIN')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6657ce1c38c621d9f904209ad1126c55d0ad10e8bd8bb4e162e37e2a044025ff"
+}

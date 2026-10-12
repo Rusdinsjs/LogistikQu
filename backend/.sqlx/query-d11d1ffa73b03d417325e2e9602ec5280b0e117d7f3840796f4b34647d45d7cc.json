@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO replenishment_request_items (\n                    request_id, spare_part_id, requested_qty, recommended_qty,\n                    verified_qty, approved_qty, notes\n                ) VALUES ($1, $2, $3, $4, $3, $3, $5)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Numeric",
+        "Numeric",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d11d1ffa73b03d417325e2e9602ec5280b0e117d7f3840796f4b34647d45d7cc"
+}

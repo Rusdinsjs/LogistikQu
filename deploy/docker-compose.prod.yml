@@ -1,0 +1,112 @@
+services:
+  logisticqu-db:
+    image: postgres:17-alpine
+    container_name: logisticqu-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-logisticqu_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-logisticqu_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logisticqu_super_secure_pass_2026}
+    volumes:
+      - logisticqu_db_data:/var/lib/postgresql/data
+    networks:
+      - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logisticqu_user} -d ${POSTGRES_DB:-logisticqu_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  logisticqu-backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: logisticqu-backend:latest
+    container_name: logisticqu-backend
+    restart: always
+    depends_on:
+      logisticqu-db:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-logisticqu_user}:${POSTGRES_PASSWORD:-logisticqu_super_secure_pass_2026}@logisticqu-db:5432/${POSTGRES_DB:-logisticqu_prod}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-vale-indonesia-logisticqu-2026}
+      RUST_LOG: ${RUST_LOG:-info}
+    networks:
+      - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  logisticqu-web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: logisticqu-web:latest
+    container_name: logisticqu-web
+    restart: always
+    depends_on:
+      logisticqu-backend:
+        condition: service_healthy
+    ports:
+      - "8090:80"
+    networks:
+      - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1/nginx-health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  logisticqu_db_data:
+    name: logisticqu_db_data
+
+networks:
+  logisticqu-net:
+    name: logisticqu-net
+    driver: bridge

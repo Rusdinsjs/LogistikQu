@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE spare_parts\n            SET deleted_at = NOW(), is_active = FALSE\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "144defe6dc82d2f12cc8b9b2c881d74df7db218fe62f959faaa4ab1c06631455"
+}

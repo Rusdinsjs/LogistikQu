@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT permission_id\n                FROM user_permissions\n                WHERE user_id = $1\n                ORDER BY permission_id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cb34182392b3d49ddd53336aba84d8934e164bee31ef6d847c1956a3f5176b9c"
+}

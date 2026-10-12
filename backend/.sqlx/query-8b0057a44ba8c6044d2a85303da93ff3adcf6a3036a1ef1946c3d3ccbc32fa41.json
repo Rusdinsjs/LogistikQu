@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT u.id, u.username, u.full_name, u.role_id, r.name as \"role_name?\",\n                   u.is_active, u.custom_permissions_enabled, u.created_at\n            FROM users u\n            LEFT JOIN roles r ON u.role_id = r.id\n            WHERE u.deleted_at IS NULL\n            ORDER BY u.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "full_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "role_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "custom_permissions_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8b0057a44ba8c6044d2a85303da93ff3adcf6a3036a1ef1946c3d3ccbc32fa41"
+}

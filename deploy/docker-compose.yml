@@ -1,24 +1,36 @@
+# LogisticQu production stack (VPS: /opt/logisticqu)
+#
+# Image & secrets are parameterized through /opt/logisticqu/.env:
+#   BACKEND_IMAGE=ghcr.io/rusdinsjs/logistikqu-backend
+#   WEB_IMAGE=ghcr.io/rusdinsjs/logistikqu-web
+#   IMAGE_TAG=<git-sha>            (managed by GitHub Actions CD)
+#   POSTGRES_PASSWORD=...          (optional, defaults keep legacy value)
+#   JWT_SECRET=...                 (optional, defaults keep legacy value)
+#
+# Without a .env file the defaults below reproduce the legacy behaviour used by
+# deploy/deploy.sh (local images logisticqu-backend:latest / logisticqu-web:latest).
+
 services:
   logisticqu-db:
     image: postgres:17-alpine
     container_name: logisticqu-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: logisticqu_prod
-      POSTGRES_USER: logisticqu_user
-      POSTGRES_PASSWORD: logisticqu_super_secure_pass_2026
+      POSTGRES_DB: ${POSTGRES_DB:-logisticqu_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-logisticqu_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logisticqu_super_secure_pass_2026}
     volumes:
       - logisticqu_db_data:/var/lib/postgresql/data
     networks:
       - logisticqu-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logisticqu_user -d logisticqu_prod"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logisticqu_user} -d ${POSTGRES_DB:-logisticqu_prod}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   logisticqu-backend:
-    image: logisticqu-backend:latest
+    image: ${BACKEND_IMAGE:-logisticqu-backend}:${IMAGE_TAG:-latest}
     container_name: logisticqu-backend
     restart: unless-stopped
     depends_on:
@@ -26,22 +38,35 @@ services:
         condition: service_healthy
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://logisticqu_user:logisticqu_super_secure_pass_2026@logisticqu-db:5432/logisticqu_prod
-      JWT_SECRET: super-secret-jwt-key-vale-indonesia-logisticqu-2026
-      RUST_LOG: info
+      DATABASE_URL: postgres://${POSTGRES_USER:-logisticqu_user}:${POSTGRES_PASSWORD:-logisticqu_super_secure_pass_2026}@logisticqu-db:5432/${POSTGRES_DB:-logisticqu_prod}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-vale-indonesia-logisticqu-2026}
+      RUST_LOG: ${RUST_LOG:-info}
     networks:
       - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   logisticqu-web:
-    image: logisticqu-web:latest
+    image: ${WEB_IMAGE:-logisticqu-web}:${IMAGE_TAG:-latest}
     container_name: logisticqu-web
     restart: unless-stopped
     depends_on:
-      - logisticqu-backend
+      logisticqu-backend:
+        condition: service_healthy
     ports:
       - "8090:80"
     networks:
       - logisticqu-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   logisticqu_db_data:

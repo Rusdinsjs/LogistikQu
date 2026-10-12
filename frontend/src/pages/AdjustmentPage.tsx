@@ -27,12 +27,13 @@ export const AdjustmentPage: React.FC = () => {
   const [notes, setNotes] = useState('');
 
   const isSupervisor =
-    user?.role_id === 'SUPERVISOR' ||
-    user?.role_id === 'SUPERVISOR_HE' ||
-    user?.role_id === 'SUPERVISOR_DT' ||
-    user?.role_id === 'MANAGER' ||
     user?.role_id === 'SUPER_ADMIN' ||
     user?.permissions?.includes('adjustment.approve') ||
+    false;
+
+  const canCreateAdjustment =
+    user?.role_id === 'SUPER_ADMIN' ||
+    user?.permissions?.includes('adjustment.create') ||
     false;
 
   const loadData = async () => {
@@ -131,15 +132,17 @@ export const AdjustmentPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Pengajuan Opname Baru
-          </button>
-        </div>
+        {canCreateAdjustment && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition"
+            >
+              <Plus className="w-4 h-4" />
+              Pengajuan Opname Baru
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}

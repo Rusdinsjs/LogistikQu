@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">LogistikQu</string>
+    <string name="mining_warehouse_title">Sistem Operasional Pergudangan Tambang</string>
+    <string name="pt_vale_indonesia">SJS-VIPO</string>
+    
+    <!-- Auth -->
+    <string name="login_title">Login LogistikQu</string>
+    <string name="username_hint">Username</string>
+    <string name="password_hint">Password</string>
+    <string name="login_button">Masuk ke Sistem</string>
+    <string name="biometric_button">Login dengan Biometrik</string>
+    
+    <!-- Operations -->
+    <string name="stock_check_title">Pengecekan Stok Rak</string>
+    <string name="spare_part_issue_title">Pengeluaran POS Loket</string>
+    <string name="goods_receive_title">Penerimaan Barang STO</string>
+    <string name="warehouse_transfer_title">Transfer Antar Gudang</string>
+    <string name="sync_queue_title">Antrean Sinkronisasi Offline</string>
+</resources>

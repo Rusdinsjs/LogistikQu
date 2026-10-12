@@ -1,9 +1,9 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_warehouse_access, get_user_warehouse_ids, AuthUser},
+        middleware::{check_any_permission, get_user_warehouse_ids, AuthUser},
     },
-    domain::models::{MainDrop, MainDropItemDetail},
+    domain::entities::MainDrop,
     error::AppError,
 };
 use axum::{
@@ -11,7 +11,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -24,27 +24,15 @@ pub async fn list_main_drops(
     AuthUser(user): AuthUser,
     Query(query): Query<DropFilterQuery>,
 ) -> Result<Json<Vec<MainDrop>>, AppError> {
+    check_any_permission(&state.pool, &user, &["drops.view", "sto.ship"]).await?;
     let wh_filter = query.container_warehouse_id.unwrap_or_default();
     let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
 
-    let items = sqlx::query_as!(
-        MainDrop,
-        r#"
-        SELECT id, drop_number, request_id, main_warehouse_id,
-               container_warehouse_id, status, dropped_by, received_by,
-               shipped_at, received_at, notes
-        FROM main_warehouse_drops
-        WHERE ($1 = '' OR container_warehouse_id = $1)
-          AND (main_warehouse_id = ANY($2) OR container_warehouse_id = ANY($2))
-        ORDER BY shipped_at DESC
-        LIMIT 100
-        "#,
-        wh_filter,
-        &user_whs[..]
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
+    let items = state
+        .services
+        .drop
+        .list_main_drops(&wh_filter, &user_whs)
+        .await?;
     Ok(Json(items))
 }
 
@@ -53,43 +41,26 @@ pub async fn get_drop_detail(
     AuthUser(user): AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>, AppError> {
-    let drop = sqlx::query_as!(
-        MainDrop,
-        r#"
-        SELECT id, drop_number, request_id, main_warehouse_id,
-                   container_warehouse_id, status, dropped_by, received_by,
-                   shipped_at, received_at, notes
-        FROM main_warehouse_drops
-        WHERE id = $1
-        "#,
-        id
-    )
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::NotFound("Data drop/suplai tidak ditemukan".to_string()))?;
+    check_any_permission(&state.pool, &user, &["drops.view", "sto.ship"]).await?;
+    let detail = state.services.drop.get_drop_detail(id).await?;
 
-    let has_main = check_warehouse_access(&state.pool, &user, &drop.main_warehouse_id).await.is_ok();
-    let has_cont = check_warehouse_access(&state.pool, &user, &drop.container_warehouse_id).await.is_ok();
-    if !has_main && !has_cont {
-        return Err(AppError::Forbidden("Anda tidak memiliki akses ke gudang terkait pengiriman ini".to_string()));
+    if let Some(drop_obj) = detail.get("drop") {
+        let container_wh = drop_obj
+            .get("container_warehouse_id")
+            .and_then(|w| w.as_str())
+            .unwrap_or_default();
+        let main_wh = drop_obj
+            .get("main_warehouse_id")
+            .and_then(|w| w.as_str())
+            .unwrap_or_default();
+        let user_whs = get_user_warehouse_ids(&state.pool, &user).await?;
+        if !user_whs.contains(&container_wh.to_string()) && !user_whs.contains(&main_wh.to_string())
+        {
+            return Err(AppError::Forbidden(
+                "Akses dokumen drop ditolak".to_string(),
+            ));
+        }
     }
 
-    let items = sqlx::query_as!(
-        MainDropItemDetail,
-        r#"
-        SELECT di.id, di.drop_id, di.spare_part_id, p.part_name,
-               di.qty, di.unit_of_measure
-        FROM main_warehouse_drop_items di
-        JOIN spare_parts p ON di.spare_part_id = p.id
-        WHERE di.drop_id = $1
-        "#,
-        id
-    )
-    .fetch_all(&state.pool)
-    .await?;
-
-    Ok(Json(json!({
-        "drop": drop,
-        "items": items
-    })))
+    Ok(Json(detail))
 }

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(i.qty), 0)\n            FROM issue_transaction_items i\n            JOIN issue_transactions t ON i.transaction_id = t.id\n            WHERE t.created_at >= CURRENT_DATE AND t.status = 'COMPLETED'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "coalesce",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1c811ada2f9c8ea8e4e0f5a2b53d5ac3425a25543a8be1d3dcb7291ee95e6e38"
+}

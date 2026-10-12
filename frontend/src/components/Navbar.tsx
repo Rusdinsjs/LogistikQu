@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Warehouse, LogOut, ShieldCheck, User } from 'lucide-react';
+import { Warehouse, LogOut, ShieldCheck, User, PanelLeftClose, PanelLeftOpen, Menu } from 'lucide-react';
 import { ProfileModal } from './ProfileModal';
+import { NotificationBell } from './NotificationBell';
+import { ThemeToggle } from './ThemeToggle';
 
-export const Navbar: React.FC = () => {
+export interface NavbarProps {
+  onToggleSidebar?: () => void;
+  isSidebarCollapsed?: boolean;
+  isSidebarOpen?: boolean;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  onToggleSidebar,
+  isSidebarCollapsed = false,
+  isSidebarOpen = true,
+}) => {
   const { user, activeWarehouse, setActiveWarehouse, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -11,8 +23,40 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <header className="glass-panel sticky top-0 z-30 flex h-16 w-full items-center justify-between px-6 border-b border-slate-800">
-        <div className="flex items-center gap-4">
+      <header className="glass-panel sticky top-0 z-30 flex h-16 w-full items-center justify-between px-4 sm:px-6 border-b border-slate-800">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Sidebar Toggle Button */}
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              title={
+                !isSidebarOpen
+                  ? 'Buka Sidebar (Ctrl+B)'
+                  : isSidebarCollapsed
+                  ? 'Perluas Sidebar (Ctrl+B)'
+                  : 'Perkecil / Tutup Sidebar (Ctrl+B)'
+              }
+              aria-label="Toggle Sidebar"
+              className="flex items-center justify-center h-9 w-9 rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-300 hover:text-cyan-300 hover:bg-slate-700/60 hover:border-cyan-500/40 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30 cursor-pointer"
+            >
+              {/* Desktop view */}
+              <span className="hidden md:flex">
+                {!isSidebarOpen ? (
+                  <PanelLeftOpen className="h-5 w-5 text-cyan-400" />
+                ) : isSidebarCollapsed ? (
+                  <PanelLeftOpen className="h-5 w-5 text-cyan-400" />
+                ) : (
+                  <PanelLeftClose className="h-5 w-5 text-slate-400 hover:text-cyan-300" />
+                )}
+              </span>
+              {/* Mobile view */}
+              <span className="flex md:hidden">
+                <Menu className="h-5 w-5 text-cyan-400" />
+              </span>
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
               <Warehouse className="h-5 w-5" />
@@ -21,7 +65,7 @@ export const Navbar: React.FC = () => {
               <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
                 Logistic<span className="text-cyan-400">Qu</span>
                 <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30 text-cyan-300">
-                  PT Vale Site
+                  SJS-VIPO Site
                 </span>
               </h1>
             </div>
@@ -49,7 +93,13 @@ export const Navbar: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* In-App Notification Engine */}
+          <NotificationBell />
+
+          {/* Theme Toggle Button (Sebelah kanan notifikasi) */}
+          <ThemeToggle />
+
           {/* User Role Badge */}
           <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/60 rounded-full px-3 py-1">
             <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />

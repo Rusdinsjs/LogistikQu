@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                w.id,\n                w.name,\n                w.warehouse_type,\n                w.category,\n                w.description,\n                w.is_active,\n                w.parent_warehouse_id,\n                ARRAY(SELECT l.main_warehouse_id FROM warehouse_supply_links l WHERE l.sub_warehouse_id = w.id ORDER BY l.main_warehouse_id)::text[] AS \"parent_warehouse_ids?\",\n                ARRAY(SELECT l.sub_warehouse_id FROM warehouse_supply_links l WHERE l.main_warehouse_id = w.id ORDER BY l.sub_warehouse_id)::text[] AS \"supplied_sub_warehouse_ids?\"\n            FROM warehouses w\n            INNER JOIN user_warehouses uw ON w.id = uw.warehouse_id\n            WHERE uw.user_id = $1 AND w.is_active = TRUE AND w.deleted_at IS NULL\n            ORDER BY w.name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "warehouse_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "category",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "parent_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "parent_warehouse_ids?",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "supplied_sub_warehouse_ids?",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "877a38c999cf1c3c986252fcff32bf6fdda41e2ff62c9c257de37bb92a01c96d"
+}

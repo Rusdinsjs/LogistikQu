@@ -24,3 +24,10 @@ Thumbs.db
 *.dump
 *.dump.gz
 *.log
+
+# Android / Gradle
+.gradle/
+**/build/
+.idea/
+local.properties
+*.apk

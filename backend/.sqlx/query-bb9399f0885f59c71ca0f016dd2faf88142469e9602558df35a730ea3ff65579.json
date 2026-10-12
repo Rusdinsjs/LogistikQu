@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE mobile_sync_conflicts\n            SET status = $1, resolved_by = $2, resolution_notes = $3, resolved_at = NOW()\n            WHERE id = $4\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb9399f0885f59c71ca0f016dd2faf88142469e9602558df35a730ea3ff65579"
+}

@@ -1,0 +1,123 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE spare_parts\n            SET requires_core_return = $1, requires_issue_approval = $2, critical_level = $3,\n                photo_url = $4, qr_code = $5\n            WHERE id = $6\n            RETURNING id, part_name, category_id, brand, equipment_category,\n                      unit_of_measure, critical_level, requires_issue_approval,\n                      lead_time_days, default_min_stock, default_max_stock, qr_code, is_active,\n                      requires_core_return, component_id, unit_cost, photo_url\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "category_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "brand",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "equipment_category",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit_of_measure",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "critical_level",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "requires_issue_approval",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "lead_time_days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "default_min_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
+        "name": "default_max_stock",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "qr_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "requires_core_return",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "component_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "unit_cost",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 16,
+        "name": "photo_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Bool",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f0b7ce271c09f991d82ffc2df7973239b8d3158f3e98b6d77c507592581ef976"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT spare_part_id, qty_physical, difference\n            FROM stock_adjustment_items\n            WHERE adjustment_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "qty_physical",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "difference",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4e3269fa46e73be8ffdded1d616ba1abffbfeaceaef9352169856cca212f05a1"
+}

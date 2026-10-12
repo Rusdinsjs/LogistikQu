@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE inventory_stock SET rack_location = $1 WHERE warehouse_id = $2 AND rack_location = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66b29d8445032b2eb9faf8f6ba191855c1250d4a3eebdcb20c9fbb04a8cacbb9"
+}

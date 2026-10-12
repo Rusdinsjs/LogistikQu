@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT bin_code, zone, shelf_level, capacity_parts, description, is_active FROM warehouse_bins WHERE id = $1 AND warehouse_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bin_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "zone",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "shelf_level",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "capacity_parts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8758fe66316782cefc9a33b97d78b21a1aad6c48e634a8a9724cf366310e9e79"
+}

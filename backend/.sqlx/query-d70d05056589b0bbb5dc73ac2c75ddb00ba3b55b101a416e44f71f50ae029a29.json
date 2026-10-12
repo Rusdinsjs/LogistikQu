@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE mobile_devices SET last_sync_at = NOW() WHERE device_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d70d05056589b0bbb5dc73ac2c75ddb00ba3b55b101a416e44f71f50ae029a29"
+}

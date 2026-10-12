@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM inventory_stock WHERE warehouse_id = $1 AND rack_location = $2 AND qty_on_hand > 0)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "92c53f4e2d18f1f415c1d96a14f065aa9d011013de8fe45c374abb56c38007bd"
+}

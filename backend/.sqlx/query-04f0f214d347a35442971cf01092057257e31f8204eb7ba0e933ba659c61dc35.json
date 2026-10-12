@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE warehouse_bins\n            SET bin_code = $1, zone = $2, shelf_level = $3, capacity_parts = $4, description = $5, is_active = $6\n            WHERE id = $7\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Text",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "04f0f214d347a35442971cf01092057257e31f8204eb7ba0e933ba659c61dc35"
+}
