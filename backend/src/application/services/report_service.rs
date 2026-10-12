@@ -1,4 +1,5 @@
 use crate::{
+    api::middleware::is_unit_in_category,
     domain::entities::{
         ConsumptionTrendReportItem, EquipmentConsumptionReportItem, IssueHistoryReportItem,
         ReplenishmentEfficiencyReportItem, StockAgingReportItem, StockBalanceReportItem,
@@ -44,9 +45,13 @@ impl ReportService {
         Self { pool }
     }
 
-    // --- Legacy / Basic Operational Reports (Preserved 100% Backward Compatibility) ---
+    // --- Legacy / Basic Operational Reports (Scoped by Division & Warehouses) ---
 
-    pub async fn report_by_unit(&self) -> Result<Vec<UnitConsumptionReport>, AppError> {
+    pub async fn report_by_unit(
+        &self,
+        allowed_whs: &[String],
+        fleet_cat: Option<&str>,
+    ) -> Result<Vec<UnitConsumptionReport>, AppError> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -58,16 +63,27 @@ impl ReportService {
             FROM issue_transactions t
             JOIN issue_transaction_items i ON t.id = i.transaction_id
             WHERE t.status = 'COMPLETED'
+              AND t.warehouse_id = ANY($1)
             GROUP BY t.unit_number, t.unit_name, t.unit_type
             ORDER BY total_qty DESC
-            LIMIT 50
-            "#
+            LIMIT 100
+            "#,
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
 
         let items = rows
             .into_iter()
+            .filter(|r| {
+                is_unit_in_category(
+                    &r.unit_number,
+                    Some(&r.unit_type),
+                    Some(&r.unit_name),
+                    fleet_cat,
+                )
+            })
+            .take(50)
             .map(|r| UnitConsumptionReport {
                 unit_number: r.unit_number,
                 unit_name: r.unit_name,
@@ -80,7 +96,10 @@ impl ReportService {
         Ok(items)
     }
 
-    pub async fn report_by_site(&self) -> Result<Vec<SiteConsumptionReport>, AppError> {
+    pub async fn report_by_site(
+        &self,
+        allowed_whs: &[String],
+    ) -> Result<Vec<SiteConsumptionReport>, AppError> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -92,10 +111,12 @@ impl ReportService {
             JOIN issue_transaction_items i ON t.id = i.transaction_id
             LEFT JOIN sites s ON t.site_id = s.id
             WHERE t.status = 'COMPLETED'
+              AND t.warehouse_id = ANY($1)
             GROUP BY t.site_id, s.name
             ORDER BY total_qty DESC
             LIMIT 50
-            "#
+            "#,
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -113,7 +134,10 @@ impl ReportService {
         Ok(items)
     }
 
-    pub async fn report_by_mechanic(&self) -> Result<Vec<MechanicConsumptionReport>, AppError> {
+    pub async fn report_by_mechanic(
+        &self,
+        allowed_whs: &[String],
+    ) -> Result<Vec<MechanicConsumptionReport>, AppError> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -123,10 +147,12 @@ impl ReportService {
             FROM issue_transactions t
             JOIN issue_transaction_items i ON t.id = i.transaction_id
             WHERE t.status = 'COMPLETED'
+              AND t.warehouse_id = ANY($1)
             GROUP BY t.mechanic_name
             ORDER BY total_qty DESC
             LIMIT 50
-            "#
+            "#,
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -147,7 +173,7 @@ impl ReportService {
 
     pub async fn stock_balance_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
     ) -> Result<Vec<StockBalanceReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -172,10 +198,10 @@ impl ReportService {
             JOIN spare_parts p ON s.spare_part_id = p.id
             JOIN warehouses w ON s.warehouse_id = w.id
             LEFT JOIN part_categories c ON p.category_id = c.id
-            WHERE ($1::text IS NULL OR s.warehouse_id = $1)
+            WHERE s.warehouse_id = ANY($1)
             ORDER BY s.warehouse_id, s.spare_part_id
             "#,
-            warehouse_id
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -203,7 +229,7 @@ impl ReportService {
 
     pub async fn stock_valuation_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
     ) -> Result<Vec<StockValuationReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -211,7 +237,7 @@ impl ReportService {
                 SELECT COALESCE(SUM(s.qty_on_hand * COALESCE(p.unit_cost, 0)), 0::numeric) as overall_val
                 FROM inventory_stock s
                 JOIN spare_parts p ON s.spare_part_id = p.id
-                WHERE ($1::text IS NULL OR s.warehouse_id = $1)
+                WHERE s.warehouse_id = ANY($1)
             )
             SELECT
                 s.spare_part_id,
@@ -231,10 +257,10 @@ impl ReportService {
             JOIN spare_parts p ON s.spare_part_id = p.id
             JOIN warehouses w ON s.warehouse_id = w.id
             LEFT JOIN part_categories c ON p.category_id = c.id
-            WHERE ($1::text IS NULL OR s.warehouse_id = $1)
+            WHERE s.warehouse_id = ANY($1)
             ORDER BY (s.qty_on_hand * COALESCE(p.unit_cost, 0)) DESC
             "#,
-            warehouse_id
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -259,7 +285,7 @@ impl ReportService {
 
     pub async fn stock_aging_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
     ) -> Result<Vec<StockAgingReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -282,11 +308,11 @@ impl ReportService {
             JOIN spare_parts p ON s.spare_part_id = p.id
             JOIN warehouses w ON s.warehouse_id = w.id
             LEFT JOIN stock_movements sm ON s.warehouse_id = sm.warehouse_id AND s.spare_part_id = sm.spare_part_id
-            WHERE ($1::text IS NULL OR s.warehouse_id = $1)
+            WHERE s.warehouse_id = ANY($1)
             GROUP BY s.spare_part_id, p.part_name, s.warehouse_id, w.name, s.qty_on_hand, p.unit_cost
             ORDER BY MAX(sm.created_at) ASC NULLS LAST
             "#,
-            warehouse_id
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -313,9 +339,10 @@ impl ReportService {
 
     pub async fn issue_history_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
         unit_number: Option<&str>,
         limit: Option<i64>,
+        fleet_cat: Option<&str>,
     ) -> Result<Vec<IssueHistoryReportItem>, AppError> {
         let max_limit = limit.unwrap_or(100).min(500);
 
@@ -326,6 +353,8 @@ impl ReportService {
                 t.created_at as issued_at,
                 t.warehouse_id,
                 t.unit_number,
+                t.unit_name,
+                t.unit_type,
                 t.hm_km,
                 t.site_id,
                 t.receiver_name,
@@ -339,20 +368,28 @@ impl ReportService {
             FROM issue_transactions t
             JOIN issue_transaction_items i ON t.id = i.transaction_id
             JOIN spare_parts p ON i.spare_part_id = p.id
-            WHERE ($1::text IS NULL OR t.warehouse_id = $1)
+            WHERE t.warehouse_id = ANY($1)
               AND ($2::text IS NULL OR t.unit_number ILIKE '%' || $2 || '%')
             ORDER BY t.created_at DESC
-            LIMIT $3
+            LIMIT 500
             "#,
-            warehouse_id,
+            allowed_whs,
             unit_number,
-            max_limit
         )
         .fetch_all(&self.pool)
         .await?;
 
         let items = rows
             .into_iter()
+            .filter(|r| {
+                is_unit_in_category(
+                    &r.unit_number,
+                    Some(&r.unit_type),
+                    Some(&r.unit_name),
+                    fleet_cat,
+                )
+            })
+            .take(max_limit as usize)
             .map(|r| IssueHistoryReportItem {
                 transaction_number: r.transaction_number,
                 issued_at: r.issued_at,
@@ -376,7 +413,7 @@ impl ReportService {
 
     pub async fn consumption_trend_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
     ) -> Result<Vec<ConsumptionTrendReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -391,12 +428,12 @@ impl ReportService {
             JOIN spare_parts p ON i.spare_part_id = p.id
             LEFT JOIN part_categories c ON p.category_id = c.id
             WHERE t.status = 'COMPLETED'
-              AND ($1::text IS NULL OR t.warehouse_id = $1)
+              AND t.warehouse_id = ANY($1)
             GROUP BY TO_CHAR(t.created_at, 'YYYY-MM'), c.name
             ORDER BY "period!" DESC, "total_value!" DESC
             LIMIT 50
             "#,
-            warehouse_id
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -417,13 +454,17 @@ impl ReportService {
 
     pub async fn equipment_consumption_report(
         &self,
+        allowed_whs: &[String],
         site_id: Option<&str>,
         unit_number: Option<&str>,
+        fleet_cat: Option<&str>,
     ) -> Result<Vec<EquipmentConsumptionReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
             SELECT
                 COALESCE(e.equipment_number, e.unit_number) as "equipment_number!",
+                e.unit_number as "unit_num!",
+                e.name as "unit_name!",
                 COALESCE(e.equipment_type_id, 'HE') as "equipment_type!",
                 COALESCE(e.model, '-') as "model!",
                 COALESCE(e.current_site_id, '-') as "site!",
@@ -437,23 +478,33 @@ impl ReportService {
                     ELSE 0::numeric
                 END as "cost_per_hm!"
             FROM equipment e
-            LEFT JOIN issue_transactions t ON e.unit_number = t.unit_number AND t.status = 'COMPLETED'
+            LEFT JOIN issue_transactions t ON e.unit_number = t.unit_number AND t.status = 'COMPLETED' AND t.warehouse_id = ANY($3)
             LEFT JOIN issue_transaction_items i ON t.id = i.transaction_id
             LEFT JOIN spare_parts p ON i.spare_part_id = p.id
             WHERE ($1::text IS NULL OR e.current_site_id = $1)
               AND ($2::text IS NULL OR e.unit_number ILIKE '%' || $2 || '%')
-            GROUP BY e.equipment_number, e.unit_number, e.equipment_type_id, e.model, e.current_site_id, e.current_hm_km
-            ORDER BY "total_cost!" DESC
-            LIMIT 50
+            GROUP BY e.equipment_number, e.unit_number, e.name, e.equipment_type_id, e.model, e.current_site_id, e.current_hm_km
+            ORDER BY "total_cost!" DESC, e.unit_number ASC
+            LIMIT 100
             "#,
             site_id,
-            unit_number
+            unit_number,
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
 
         let items = rows
             .into_iter()
+            .filter(|r| {
+                is_unit_in_category(
+                    &r.unit_num,
+                    Some(&r.equipment_type),
+                    Some(&r.unit_name),
+                    fleet_cat,
+                )
+            })
+            .take(50)
             .map(|r| EquipmentConsumptionReportItem {
                 equipment_number: r.equipment_number,
                 equipment_type: r.equipment_type,
@@ -474,6 +525,7 @@ impl ReportService {
 
     pub async fn warehouse_performance_report(
         &self,
+        allowed_whs: &[String],
     ) -> Result<Vec<WarehousePerformanceReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -507,9 +559,11 @@ impl ReportService {
             LEFT JOIN inventory_stock s ON w.id = s.warehouse_id
             LEFT JOIN spare_parts p ON s.spare_part_id = p.id
             WHERE w.is_active = true
+              AND w.id = ANY($1)
             GROUP BY w.id, w.name, w.warehouse_type
             ORDER BY "total_valuation!" DESC
-            "#
+            "#,
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;
@@ -534,7 +588,7 @@ impl ReportService {
 
     pub async fn replenishment_efficiency_report(
         &self,
-        warehouse_id: Option<&str>,
+        allowed_whs: &[String],
     ) -> Result<Vec<ReplenishmentEfficiencyReportItem>, AppError> {
         let rows = sqlx::query!(
             r#"
@@ -563,12 +617,12 @@ impl ReportService {
             FROM replenishment_requests r
             JOIN warehouses w ON r.container_warehouse_id = w.id
             LEFT JOIN replenishment_request_items ri ON r.id = ri.request_id
-            WHERE ($1::text IS NULL OR r.container_warehouse_id = $1)
+            WHERE (r.container_warehouse_id = ANY($1) OR r.main_warehouse_id = ANY($1))
             GROUP BY r.id, r.request_number, r.container_warehouse_id, w.name, r.status, r.created_at, r.verified_at, r.approved_at, r.received_at
             ORDER BY r.created_at DESC
             LIMIT 50
             "#,
-            warehouse_id
+            allowed_whs
         )
         .fetch_all(&self.pool)
         .await?;

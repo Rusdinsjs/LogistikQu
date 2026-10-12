@@ -42,3 +42,11 @@ interface SyncRepository {
     suspend fun resolveConflict(conflictId: String, resolution: String, notes: String?): Result<Unit>
     suspend fun triggerManualSync(): Result<SyncProcessResult>
 }
+
+interface ReplenishmentRepository {
+    suspend fun getRecommendations(warehouseId: String): Result<List<ReplenishmentRecommendation>>
+    suspend fun submitReplenishmentRequest(containerWarehouseId: String, items: List<ReplenishmentDraftItem>, notes: String?): Result<String>
+    suspend fun getWarehouseBins(warehouseId: String): Result<List<WarehouseBin>>
+    suspend fun relocateStockBin(warehouseId: String, sparePartId: String, targetBinCode: String): Result<Unit>
+}
+

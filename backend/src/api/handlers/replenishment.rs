@@ -2,8 +2,8 @@ use crate::{
     api::{
         handlers::auth::AppState,
         middleware::{
-            check_any_permission, check_permission, check_warehouse_access, get_user_warehouse_ids,
-            AuthUser,
+            check_any_permission, check_permission, check_warehouse_access,
+            get_default_user_warehouse, get_user_warehouse_ids, AuthUser,
         },
     },
     domain::entities::{
@@ -32,9 +32,10 @@ pub async fn get_recommendations(
     AuthUser(user): AuthUser,
     Query(query): Query<ReplenishmentFilterQuery>,
 ) -> Result<Json<Vec<RecommendationItem>>, AppError> {
-    let warehouse_id = query
-        .warehouse_id
-        .unwrap_or_else(|| "WH-CONT-HE".to_string());
+    let warehouse_id = match query.warehouse_id.filter(|s| !s.trim().is_empty()) {
+        Some(wh) => wh,
+        None => get_default_user_warehouse(&state.pool, &user).await?,
+    };
     check_warehouse_access(&state.pool, &user, &warehouse_id).await?;
 
     let recs = state
@@ -50,9 +51,10 @@ pub async fn get_replenishment_intelligence(
     AuthUser(user): AuthUser,
     Query(query): Query<ReplenishmentFilterQuery>,
 ) -> Result<Json<Vec<ReplenishmentIntelligenceItem>>, AppError> {
-    let warehouse_id = query
-        .warehouse_id
-        .unwrap_or_else(|| "WH-CONT-HE".to_string());
+    let warehouse_id = match query.warehouse_id.filter(|s| !s.trim().is_empty()) {
+        Some(wh) => wh,
+        None => get_default_user_warehouse(&state.pool, &user).await?,
+    };
     check_warehouse_access(&state.pool, &user, &warehouse_id).await?;
 
     let intel = state

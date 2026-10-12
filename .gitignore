@@ -8,6 +8,8 @@ node_modules/
 dist/
 **/dist/
 .pnpm-store/
+backend/bin/
+frontend/build_dist/
 
 # Environment & Secrets
 .env
@@ -31,3 +33,4 @@ Thumbs.db
 .idea/
 local.properties
 *.apk
+.android/

@@ -1,6 +1,8 @@
 package com.sjs.logistikqu.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -11,6 +13,7 @@ import com.sjs.logistikqu.presentation.screens.dashboard.DashboardScreen
 import com.sjs.logistikqu.presentation.screens.dashboard.DashboardViewModel
 import com.sjs.logistikqu.presentation.screens.issue.SparePartIssueScreen
 import com.sjs.logistikqu.presentation.screens.issue.SparePartIssueViewModel
+import com.sjs.logistikqu.presentation.screens.profile.ProfileScreen
 import com.sjs.logistikqu.presentation.screens.receive.GoodsReceiveScreen
 import com.sjs.logistikqu.presentation.screens.receive.GoodsReceiveViewModel
 import com.sjs.logistikqu.presentation.screens.stockcheck.StockCheckScreen
@@ -19,6 +22,11 @@ import com.sjs.logistikqu.presentation.screens.sync.SyncQueueScreen
 import com.sjs.logistikqu.presentation.screens.sync.SyncQueueViewModel
 import com.sjs.logistikqu.presentation.screens.transfer.WarehouseTransferScreen
 import com.sjs.logistikqu.presentation.screens.transfer.WarehouseTransferViewModel
+
+import com.sjs.logistikqu.presentation.screens.dispatch.MainAdminDispatchScreen
+import com.sjs.logistikqu.presentation.screens.replenishment.ReplenishmentRequestScreen
+import com.sjs.logistikqu.presentation.screens.returns.UsedPartReturnsScreen
+import com.sjs.logistikqu.presentation.screens.supervisor.SupervisorApprovalScreen
 
 @Composable
 fun LogistikQuNavGraph(
@@ -49,6 +57,11 @@ fun LogistikQuNavGraph(
                 onNavigateToIssue = { navController.navigate(Screen.SparePartIssue.route) },
                 onNavigateToReceive = { navController.navigate(Screen.GoodsReceive.route) },
                 onNavigateToTransfer = { navController.navigate(Screen.WarehouseTransfer.route) },
+                onNavigateToReplenishmentRequest = { navController.navigate(Screen.ReplenishmentRequest.route) },
+                onNavigateToSupervisorApproval = { navController.navigate(Screen.SupervisorApproval.route) },
+                onNavigateToMainAdminDispatch = { navController.navigate(Screen.MainAdminDispatch.route) },
+                onNavigateToUsedPartReturns = { navController.navigate(Screen.UsedPartReturns.route) },
+                onNavigateToMechanicRequest = { navController.navigate(Screen.MechanicRequest.route) },
                 onNavigateToSyncQueue = { navController.navigate(Screen.SyncQueue.route) },
                 onLogout = {
                     navController.navigate(Screen.Login.route) {
@@ -90,10 +103,67 @@ fun LogistikQuNavGraph(
             )
         }
 
+        composable(Screen.ReplenishmentRequest.route) {
+            val viewModel: com.sjs.logistikqu.presentation.screens.replenishment.ReplenishmentRequestViewModel = hiltViewModel()
+            ReplenishmentRequestScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.SupervisorApproval.route) {
+            val viewModel: com.sjs.logistikqu.presentation.screens.supervisor.SupervisorApprovalViewModel = hiltViewModel()
+            SupervisorApprovalScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.MainAdminDispatch.route) {
+            val viewModel: com.sjs.logistikqu.presentation.screens.dispatch.MainAdminDispatchViewModel = hiltViewModel()
+            MainAdminDispatchScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.UsedPartReturns.route) {
+            val viewModel: com.sjs.logistikqu.presentation.screens.returns.UsedPartReturnsViewModel = hiltViewModel()
+            UsedPartReturnsScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.MechanicRequest.route) {
+            val viewModel: com.sjs.logistikqu.presentation.screens.mechanic.MechanicRequestViewModel = hiltViewModel()
+            com.sjs.logistikqu.presentation.screens.mechanic.MechanicRequestScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Screen.SyncQueue.route) {
             val viewModel: SyncQueueViewModel = hiltViewModel()
             SyncQueueScreen(
                 viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Profile.route) {
+            val viewModel: DashboardViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsState()
+            ProfileScreen(
+                user = uiState.user,
+                activeWarehouse = uiState.activeWarehouse,
+                onLogoutClick = {
+                    viewModel.logout {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                },
                 onNavigateBack = { navController.popBackStack() }
             )
         }

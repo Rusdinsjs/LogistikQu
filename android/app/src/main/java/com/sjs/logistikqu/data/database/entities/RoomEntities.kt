@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * 1. Local Inventory Cache: Cached snapshot of inventory balance from server
+ * 1. Local Inventory Cache: Cached snapshot of inventory balance from server (inventory_stock)
  */
 @Entity(
     tableName = "inventory_cache",

@@ -1,0 +1,158 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH inserted AS (\n                INSERT INTO equipment_maintenance_history (\n                    work_order_number, equipment_id, unit_number, component_id, spare_part_id,\n                    failure_code, failure_symptom, maintenance_type, hm_km, parts_qty,\n                    parts_cost, labor_cost, total_cost, downtime_hours, mechanic_name,\n                    performed_at, notes\n                ) VALUES (\n                    $1, $2, $3, $4, $5,\n                    $6, $7, $8, $9, $10,\n                    $11, $12, $13, $14, $15,\n                    $16, $17\n                )\n                RETURNING *\n            )\n            SELECT\n                i.id as \"id!\",\n                i.work_order_number,\n                i.equipment_id as \"equipment_id!\",\n                i.unit_number as \"unit_number!\",\n                i.component_id,\n                c.name as \"component_name?\",\n                i.spare_part_id,\n                p.part_name as \"part_name?\",\n                i.failure_code,\n                i.failure_symptom,\n                i.maintenance_type as \"maintenance_type!\",\n                i.hm_km as \"hm_km!\",\n                i.parts_qty as \"parts_qty!\",\n                i.parts_cost as \"parts_cost!\",\n                i.labor_cost as \"labor_cost!\",\n                i.total_cost as \"total_cost!\",\n                i.downtime_hours as \"downtime_hours!\",\n                i.mechanic_name,\n                i.performed_at as \"performed_at!\",\n                i.notes,\n                i.created_at as \"created_at!\"\n            FROM inserted i\n            LEFT JOIN equipment_components c ON i.component_id = c.id\n            LEFT JOIN spare_parts p ON i.spare_part_id = p.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "work_order_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "equipment_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_number!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "component_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "component_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "part_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "failure_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "failure_symptom",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "maintenance_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "hm_km!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "parts_qty!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 13,
+        "name": "parts_cost!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 14,
+        "name": "labor_cost!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 15,
+        "name": "total_cost!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 16,
+        "name": "downtime_hours!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 17,
+        "name": "mechanic_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "performed_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Varchar",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "053f5ca8c90b16a9f302d77557e6f77dba5499dcd7fe47352868be046016c5d1"
+}

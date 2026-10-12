@@ -287,7 +287,12 @@ impl InventoryService {
                 COUNT(CASE WHEN qty_on_hand <= min_stock THEN 1 END)::bigint as critical_count,
                 COUNT(CASE WHEN qty_on_hand > min_stock AND qty_on_hand <= (min_stock * 1.25) THEN 1 END)::bigint as warning_count
             FROM inventory_stock
-            WHERE warehouse_id = $1 AND deleted_at IS NULL
+            WHERE (
+                  warehouse_id = $1
+                  OR warehouse_id IN (SELECT sub_warehouse_id FROM warehouse_supply_links WHERE main_warehouse_id = $1)
+                  OR warehouse_id IN (SELECT id FROM warehouses WHERE parent_warehouse_id = $1)
+              )
+              AND deleted_at IS NULL
             "#,
             warehouse_id
         )
@@ -301,7 +306,11 @@ impl InventoryService {
                 COALESCE(SUM(i.qty), 0) as total_qty
             FROM issue_transactions t
             LEFT JOIN issue_transaction_items i ON t.id = i.transaction_id
-            WHERE t.warehouse_id = $1
+            WHERE (
+                  t.warehouse_id = $1
+                  OR t.warehouse_id IN (SELECT sub_warehouse_id FROM warehouse_supply_links WHERE main_warehouse_id = $1)
+                  OR t.warehouse_id IN (SELECT id FROM warehouses WHERE parent_warehouse_id = $1)
+              )
               AND t.created_at >= CURRENT_DATE
               AND t.status = 'COMPLETED'
             "#,
@@ -314,7 +323,7 @@ impl InventoryService {
             r#"
             SELECT COUNT(*)::bigint
             FROM replenishment_requests
-            WHERE container_warehouse_id = $1
+            WHERE (container_warehouse_id = $1 OR main_warehouse_id = $1)
               AND status IN ('REQUESTED', 'VERIFIED', 'RETURNED_TO_MAIN_ADMIN')
             "#,
             warehouse_id

@@ -3,6 +3,7 @@ package com.sjs.logistikqu.presentation.screens.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sjs.logistikqu.data.api.LogistikQuApiService
+import com.sjs.logistikqu.data.api.models.MobileNotificationDto
 import com.sjs.logistikqu.domain.entities.User
 import com.sjs.logistikqu.domain.repository.AuthRepository
 import com.sjs.logistikqu.domain.repository.SyncRepository
@@ -22,7 +23,10 @@ data class DashboardUiState(
     val isSyncing: Boolean = false,
     val lowStockCount: Int = 4,
     val todayTransactionsCount: Int = 18,
-    val activeWarehouse: String = "WH-CONT-HE"
+    val activeWarehouse: String = "WH-CONT-HE",
+    val notifications: List<MobileNotificationDto> = emptyList(),
+    val showNotificationsModal: Boolean = false,
+    val showApprovalModal: Boolean = false
 )
 
 @HiltViewModel
@@ -60,6 +64,48 @@ class DashboardViewModel @Inject constructor(
                 if (res.isSuccessful) {
                     val count = res.body()?.unreadCount ?: 0
                     _uiState.update { it.copy(unreadNotificationCount = count) }
+                }
+            } catch (e: Exception) {
+                // Offline fallback
+            }
+        }
+    }
+
+    fun openNotificationsModal() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(showNotificationsModal = true) }
+            try {
+                val res = apiService.getNotifications()
+                if (res.isSuccessful && res.body() != null) {
+                    _uiState.update { it.copy(notifications = res.body()!!) }
+                }
+            } catch (e: Exception) {
+                // Keep existing or empty list on offline
+            }
+        }
+    }
+
+    fun closeNotificationsModal() {
+        _uiState.update { it.copy(showNotificationsModal = false) }
+    }
+
+    fun openApprovalModal() {
+        _uiState.update { it.copy(showApprovalModal = true) }
+    }
+
+    fun closeApprovalModal() {
+        _uiState.update { it.copy(showApprovalModal = false) }
+    }
+
+    fun markNotificationRead(id: String) {
+        viewModelScope.launch {
+            try {
+                apiService.markNotificationAsRead(id)
+                val res = apiService.getNotifications()
+                if (res.isSuccessful && res.body() != null) {
+                    val list = res.body()!!
+                    val unread = list.count { !it.isRead }
+                    _uiState.update { it.copy(notifications = list, unreadNotificationCount = unread) }
                 }
             } catch (e: Exception) {
                 // Offline fallback

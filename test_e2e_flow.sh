@@ -46,6 +46,7 @@ ISSUE_PAYLOAD='{
   "work_order_number": "WO-2026-0901",
   "maintenance_type": "Corrective Breakdown",
   "priority": "HIGH",
+  "mechanic_signature_type": "PHYSICAL",
   "items": [
     {
       "spare_part_id": "ENG-001",

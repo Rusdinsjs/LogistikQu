@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar, isTabAccessible, type TabId } from './components/Sidebar';
 import { LoginPage } from './pages/LoginPage';
@@ -16,6 +17,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { AuditPage } from './pages/AuditPage';
 import { UsersPage } from './pages/UsersPage';
 import { UsedPartReturnsPage } from './pages/UsedPartReturnsPage';
+import { MechanicRequestsPage } from './pages/MechanicRequestsPage';
 import { ShieldAlert } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -89,8 +91,12 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user && !isTabAccessible(currentTab, user.permissions, user.role_id)) {
-      setCurrentTab('dashboard');
+    if (user) {
+      if (user.role_id === 'MECHANIC' && currentTab === 'dashboard') {
+        setCurrentTab('mechanic-requests');
+      } else if (!isTabAccessible(currentTab, user.permissions, user.role_id)) {
+        setCurrentTab(user.role_id === 'MECHANIC' ? 'mechanic-requests' : 'dashboard');
+      }
     }
   }, [currentTab, user]);
 
@@ -190,6 +196,7 @@ const AppContent: React.FC = () => {
                 {currentTab === 'dashboard' && <DashboardPage onNavigate={setCurrentTab} />}
                 {currentTab === 'inventory' && <InventoryPage />}
                 {currentTab === 'bins' && <WarehouseBinsPage />}
+                {currentTab === 'mechanic-requests' && <MechanicRequestsPage />}
                 {currentTab === 'pos' && <PosIssuePage />}
                 {currentTab === 'returns' && <UsedPartReturnsPage />}
                 {currentTab === 'replenishment' && <ReplenishmentPage />}
@@ -213,9 +220,11 @@ export function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </ToastProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>

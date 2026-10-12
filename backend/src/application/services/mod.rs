@@ -8,6 +8,7 @@ pub mod inventory_service;
 pub mod issue_service;
 pub mod maintenance_service;
 pub mod master_service;
+pub mod mechanic_request_service;
 pub mod notification_service;
 pub mod replenishment_service;
 pub mod report_service;
@@ -25,6 +26,7 @@ pub use inventory_service::InventoryService;
 pub use issue_service::IssueService;
 pub use maintenance_service::MaintenanceService;
 pub use master_service::MasterService;
+pub use mechanic_request_service::MechanicRequestService;
 pub use notification_service::NotificationService;
 pub use replenishment_service::ReplenishmentService;
 pub use report_service::ReportService;
@@ -42,6 +44,7 @@ pub struct ServiceContainer {
     pub master: MasterService,
     pub inventory: InventoryService,
     pub issue: IssueService,
+    pub mechanic_request: MechanicRequestService,
     pub replenishment: ReplenishmentService,
     pub drop: DropService,
     pub adjustment: AdjustmentService,
@@ -63,6 +66,7 @@ impl ServiceContainer {
             master: MasterService::new(pool.clone()),
             inventory: InventoryService::new(pool.clone()),
             issue: IssueService::new(pool.clone()),
+            mechanic_request: MechanicRequestService::new(pool.clone()),
             replenishment: ReplenishmentService::new(pool.clone()),
             drop: DropService::new(pool.clone()),
             adjustment: AdjustmentService::new(pool.clone()),

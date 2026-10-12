@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.site_id,\n                COALESCE(s.name, t.site_id) as site_name,\n                COUNT(DISTINCT t.id)::bigint as total_tx,\n                COALESCE(SUM(i.qty), 0) as total_qty\n            FROM issue_transactions t\n            JOIN issue_transaction_items i ON t.id = i.transaction_id\n            LEFT JOIN sites s ON t.site_id = s.id\n            WHERE t.status = 'COMPLETED'\n              AND t.warehouse_id = ANY($1)\n            GROUP BY t.site_id, s.name\n            ORDER BY total_qty DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "site_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_tx",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_qty",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d88fe320f42d32e460275163971d4bb687410194bc4ebf3d7ba721fd859da2a4"
+}

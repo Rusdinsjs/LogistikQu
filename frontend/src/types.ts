@@ -31,6 +31,7 @@ export interface UserProfile {
   avatar_url?: string;
   email?: string;
   phone?: string;
+  employee_id?: string;
 }
 
 export interface UpdateProfilePayload {
@@ -147,6 +148,42 @@ export interface Site {
   is_active: boolean;
 }
 
+export interface MobileDevice {
+  device_id: string;
+  device_name: string;
+  assigned_warehouse_id: string | null;
+  assigned_warehouse_name?: string | null;
+  assigned_user_id?: string | null;
+  assigned_user_name?: string | null;
+  app_version?: string | null;
+  is_active: boolean;
+  last_sync_at?: string | null;
+  photo_url?: string | null;
+  qr_code?: string | null;
+  created_at: string;
+}
+
+export interface CreateMobileDevicePayload {
+  device_id: string;
+  device_name: string;
+  assigned_warehouse_id?: string | null;
+  assigned_user_id?: string | null;
+  app_version?: string | null;
+  photo_url?: string | null;
+  qr_code?: string | null;
+  is_active?: boolean;
+}
+
+export interface UpdateMobileDevicePayload {
+  device_name?: string;
+  assigned_warehouse_id?: string | null;
+  assigned_user_id?: string | null;
+  app_version?: string | null;
+  photo_url?: string | null;
+  qr_code?: string | null;
+  is_active?: boolean;
+}
+
 export interface InventoryStockItem {
   id: string;
   warehouse_id: string;
@@ -209,6 +246,10 @@ export interface CreateIssuePayload {
   notes?: string;
   evidence_photo_url?: string;
   document_url?: string;
+  mechanic_signature_url?: string;
+  signature_type?: 'DIGITAL' | 'PHYSICAL';
+  receipt_printed?: boolean;
+  signed_receipt_photo_url?: string;
   items: CreateIssueItem[];
 }
 
@@ -218,10 +259,16 @@ export interface IssueTransaction {
   warehouse_id: string;
   site_id: string;
   receiver_name: string;
+  receiver_employee_id?: string;
+  receiver_department?: string;
   unit_number: string;
   unit_name: string;
   unit_type: string;
+  ct_number?: string;
+  serial_number?: string;
+  hm_km?: number;
   mechanic_name: string;
+  mechanic_id?: string;
   work_order_number?: string;
   maintenance_type?: string;
   priority: string;
@@ -229,6 +276,11 @@ export interface IssueTransaction {
   notes?: string;
   evidence_photo_url?: string;
   document_url?: string;
+  mechanic_signature_url?: string;
+  signature_type?: 'DIGITAL' | 'PHYSICAL';
+  receipt_printed?: boolean;
+  receipt_printed_at?: string;
+  signed_receipt_photo_url?: string;
   created_at: string;
 }
 
@@ -320,14 +372,32 @@ export interface MainDrop {
   notes?: string;
 }
 
+export interface StockAdjustmentItem {
+  id: string;
+  adjustment_id: string;
+  spare_part_id: string;
+  part_name: string;
+  qty_system: number;
+  qty_physical: number;
+  difference: number;
+}
+
 export interface StockAdjustment {
   id: string;
   adjustment_number: string;
   warehouse_id: string;
   reason: string;
   notes?: string;
-  status: string;
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | string;
+  created_by?: string;
+  approved_by?: string;
+  approved_at?: string;
   created_at: string;
+}
+
+export interface StockAdjustmentEntry {
+  adjustment: StockAdjustment;
+  items: StockAdjustmentItem[];
 }
 
 export interface DashboardSummary {
@@ -744,5 +814,230 @@ export interface ReplenishmentEfficiencyReportItem {
   total_qty_requested: number;
   total_qty_received: number;
   fulfillment_accuracy_percent: number;
+}
+
+// ============================================================================
+// Permohonan Stock Mekanik (Mechanic Stock Request)
+// ============================================================================
+
+export type MechanicRequestStatus =
+  | 'SUBMITTED'
+  | 'REVISION_REQUESTED'
+  | 'APPROVED'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'CANCELLED';
+
+export type MechanicRequestType = 'REPLACEMENT' | 'RETURN';
+
+export type DamageCategory =
+  | 'WEAR'
+  | 'BROKEN'
+  | 'LEAK'
+  | 'BURNT'
+  | 'ACCIDENT'
+  | 'OTHER';
+
+export type ReturnReason =
+  | 'UNUSED'
+  | 'EXCESS'
+  | 'WRONG_PART'
+  | 'WO_CANCELLED'
+  | 'OTHER';
+
+export type ItemCondition = 'NEW' | 'GOOD' | 'DAMAGED';
+
+export interface MechanicRequest {
+  id: string;
+  request_number: string;
+  request_type: MechanicRequestType;
+  warehouse_id: string;
+  site_id?: string | null;
+  status: MechanicRequestStatus;
+  unit_number?: string | null;
+  unit_name?: string | null;
+  unit_type?: string | null;
+  ct_number?: string | null;
+  serial_number?: string | null;
+  hm_km?: number | null;
+  work_order_number?: string | null;
+  maintenance_type?: string | null;
+  priority: 'LOW' | 'NORMAL' | 'HIGH' | 'EMERGENCY';
+  mechanic_id?: string | null;
+  mechanic_name: string;
+  requester_user_id?: string | null;
+  requester_name?: string | null;
+  input_channel: 'MECHANIC' | 'ADMIN_CONTAINER' | 'MOBILE';
+  damage_category?: DamageCategory | null;
+  damage_description?: string | null;
+  damage_photo_url?: string | null;
+  old_part_photo_url?: string | null;
+  document_url?: string | null;
+  return_reason?: ReturnReason | null;
+  reference_issue_number?: string | null;
+  notes?: string | null;
+  revision_notes?: string | null;
+  revision_count: number;
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  approve_notes?: string | null;
+  rejected_by?: string | null;
+  rejected_by_name?: string | null;
+  rejected_at?: string | null;
+  reject_reason?: string | null;
+  fulfilled_by?: string | null;
+  fulfilled_by_name?: string | null;
+  fulfilled_at?: string | null;
+  fulfill_notes?: string | null;
+  issue_transaction_id?: string | null;
+  issue_transaction_number?: string | null;
+  client_uuid?: string | null;
+  device_id?: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  items_count?: number;
+  total_qty?: number;
+}
+
+export interface MechanicRequestItem {
+  id: string;
+  request_id: string;
+  spare_part_id: string;
+  part_name: string;
+  unit_of_measure: string;
+  requested_qty: number;
+  approved_qty?: number | null;
+  fulfilled_qty?: number | null;
+  item_condition?: ItemCondition | null;
+  notes?: string | null;
+  stock_on_hand?: number;
+}
+
+export interface MechanicRequestHistory {
+  id: string;
+  request_id: string;
+  action: string;
+  from_status?: string | null;
+  to_status: string;
+  actor_id?: string | null;
+  actor_name?: string | null;
+  actor_role?: string | null;
+  notes?: string | null;
+  changes?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface MechanicRequestSummary {
+  total: number;
+  submitted: number;
+  revision_requested: number;
+  approved: number;
+  completed: number;
+  rejected: number;
+  cancelled: number;
+}
+
+export interface MechanicContext {
+  employee?: {
+    id: string;
+    name: string;
+    position?: string | null;
+    department_id?: string | null;
+  } | null;
+  warehouses: WarehouseInfo[];
+}
+
+export interface CreateMechanicRequestPayload {
+  request_type: MechanicRequestType;
+  warehouse_id: string;
+  site_id?: string | null;
+  unit_number?: string | null;
+  unit_name?: string | null;
+  unit_type?: string | null;
+  ct_number?: string | null;
+  serial_number?: string | null;
+  hm_km?: number | null;
+  work_order_number?: string | null;
+  maintenance_type?: string | null;
+  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'EMERGENCY';
+  mechanic_id?: string | null;
+  mechanic_name?: string | null;
+  damage_category?: DamageCategory | null;
+  damage_description?: string | null;
+  damage_photo_url?: string | null;
+  old_part_photo_url?: string | null;
+  document_url?: string | null;
+  return_reason?: ReturnReason | null;
+  reference_issue_number?: string | null;
+  notes?: string | null;
+  client_uuid?: string | null;
+  device_id?: string | null;
+  items: Array<{
+    spare_part_id: string;
+    qty: number;
+    item_condition?: ItemCondition | null;
+    notes?: string | null;
+  }>;
+}
+
+export interface UpdateMechanicRequestPayload {
+  request_type?: MechanicRequestType;
+  warehouse_id?: string;
+  site_id?: string | null;
+  unit_number?: string | null;
+  unit_name?: string | null;
+  unit_type?: string | null;
+  ct_number?: string | null;
+  serial_number?: string | null;
+  hm_km?: number | null;
+  work_order_number?: string | null;
+  maintenance_type?: string | null;
+  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'EMERGENCY';
+  mechanic_id?: string | null;
+  mechanic_name?: string | null;
+  damage_category?: DamageCategory | null;
+  damage_description?: string | null;
+  damage_photo_url?: string | null;
+  old_part_photo_url?: string | null;
+  document_url?: string | null;
+  return_reason?: ReturnReason | null;
+  reference_issue_number?: string | null;
+  notes?: string | null;
+  items?: Array<{
+    spare_part_id: string;
+    qty: number;
+    item_condition?: ItemCondition | null;
+    notes?: string | null;
+  }>;
+}
+
+export interface ApproveMechanicRequestPayload {
+  notes?: string;
+  items?: Array<{
+    item_id: string;
+    qty: number;
+  }>;
+}
+
+export interface RequestRevisionPayload {
+  notes: string;
+}
+
+export interface RejectMechanicRequestPayload {
+  reason: string;
+}
+
+export interface CancelMechanicRequestPayload {
+  reason?: string;
+}
+
+export interface FulfillMechanicRequestPayload {
+  notes?: string;
+  items?: Array<{
+    item_id: string;
+    qty: number;
+  }>;
 }
 

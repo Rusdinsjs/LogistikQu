@@ -1,13 +1,17 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_permission, AuthUser},
+        middleware::{
+            check_any_permission, check_permission, get_user_fleet_category,
+            is_mechanic_in_category, is_unit_in_category, AuthUser,
+        },
     },
     domain::entities::{
-        CreateEmployeeRequest, CreateEquipmentRequest, CreateSiteRequest,
-        CreateWarehouseCategoryRequest, CreateWarehouseRequest, Employee, Equipment, Site,
-        SparePart, UpdateSiteRequest, UpdateSparePartRequest, UpdateWarehouseCategoryRequest,
-        UpdateWarehouseRequest, WarehouseCategory, WarehouseInfo,
+        CreateEmployeeRequest, CreateEquipmentRequest, CreateMobileDeviceRequest,
+        CreateSiteRequest, CreateWarehouseCategoryRequest, CreateWarehouseRequest, Employee,
+        Equipment, MobileDevice, Site, SparePart, UpdateMobileDeviceRequest, UpdateSiteRequest,
+        UpdateSparePartRequest, UpdateWarehouseCategoryRequest, UpdateWarehouseRequest,
+        WarehouseCategory, WarehouseInfo,
     },
     error::AppError,
 };
@@ -62,12 +66,29 @@ pub async fn update_spare_part(
 // Equipment
 pub async fn list_equipment(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
     Query(query): Query<MasterQuery>,
 ) -> Result<Json<Vec<Equipment>>, AppError> {
     let search = query.search.unwrap_or_default();
     let eq = state.services.master.list_equipment(&search).await?;
-    Ok(Json(eq))
+    let user_cat = get_user_fleet_category(&state.pool, &user).await?;
+    let effective_cat = user_cat.or_else(|| query.category.filter(|c| !c.is_empty()));
+
+    let filtered = if let Some(ref cat) = effective_cat {
+        eq.into_iter()
+            .filter(|e| {
+                is_unit_in_category(
+                    &e.unit_number,
+                    e.equipment_type_id.as_deref(),
+                    Some(&e.name),
+                    Some(cat),
+                )
+            })
+            .collect()
+    } else {
+        eq
+    };
+    Ok(Json(filtered))
 }
 
 pub async fn create_equipment(
@@ -75,7 +96,12 @@ pub async fn create_equipment(
     AuthUser(user): AuthUser,
     Json(payload): Json<CreateEquipmentRequest>,
 ) -> Result<Json<Equipment>, AppError> {
-    check_permission(&state.pool, &user, "master.manage").await?;
+    check_any_permission(
+        &state.pool,
+        &user,
+        &["master.manage", "issue.create", "mechanic_request.create"],
+    )
+    .await?;
     let eq = state
         .services
         .master
@@ -87,10 +113,28 @@ pub async fn create_equipment(
 // Employees
 pub async fn list_employees(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
+    Query(query): Query<MasterQuery>,
 ) -> Result<Json<Vec<Employee>>, AppError> {
     let emps = state.services.master.list_employees().await?;
-    Ok(Json(emps))
+    let user_cat = get_user_fleet_category(&state.pool, &user).await?;
+    let effective_cat = user_cat.or_else(|| query.category.filter(|c| !c.is_empty()));
+
+    let filtered = if let Some(ref cat) = effective_cat {
+        emps.into_iter()
+            .filter(|e| {
+                is_mechanic_in_category(
+                    e.department_id.as_deref(),
+                    e.position.as_deref(),
+                    &e.name,
+                    Some(cat),
+                )
+            })
+            .collect()
+    } else {
+        emps
+    };
+    Ok(Json(filtered))
 }
 
 pub async fn create_employee(
@@ -98,7 +142,7 @@ pub async fn create_employee(
     AuthUser(user): AuthUser,
     Json(payload): Json<CreateEmployeeRequest>,
 ) -> Result<Json<Employee>, AppError> {
-    check_permission(&state.pool, &user, "master.manage").await?;
+    check_any_permission(&state.pool, &user, &["master.manage", "issue.create"]).await?;
     let emp = state
         .services
         .master
@@ -154,10 +198,29 @@ pub async fn delete_site(
 // Warehouses
 pub async fn list_warehouses(
     State(state): State<AppState>,
-    _user: AuthUser,
+    AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<WarehouseInfo>>, AppError> {
     let whs = state.services.master.list_warehouses().await?;
-    Ok(Json(whs))
+    let user_cat = get_user_fleet_category(&state.pool, &user).await?;
+    let filtered = if let Some(ref cat) = user_cat {
+        let cat_upper = cat.to_uppercase();
+        whs.into_iter()
+            .filter(|w| {
+                let id_upper = w.id.to_uppercase();
+                let w_cat = w.category.to_uppercase();
+                if cat_upper == "DT" {
+                    w_cat == "DUMP_TRUCK" || id_upper.contains("DT")
+                } else if cat_upper == "HE" {
+                    w_cat == "HEAVY_EQUIPMENT" || id_upper.contains("HE")
+                } else {
+                    true
+                }
+            })
+            .collect()
+    } else {
+        whs
+    };
+    Ok(Json(filtered))
 }
 
 pub async fn create_warehouse(
@@ -268,5 +331,49 @@ pub async fn delete_warehouse_category(
         .master
         .delete_warehouse_category(&user, &id)
         .await?;
+    Ok(Json(res))
+}
+
+// Mobile Devices
+pub async fn list_devices(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> Result<Json<Vec<MobileDevice>>, AppError> {
+    let devices = state.services.master.list_devices().await?;
+    Ok(Json(devices))
+}
+
+pub async fn create_device(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(payload): Json<CreateMobileDeviceRequest>,
+) -> Result<Json<MobileDevice>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+    let device = state.services.master.create_device(&user, payload).await?;
+    Ok(Json(device))
+}
+
+pub async fn update_device(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateMobileDeviceRequest>,
+) -> Result<Json<MobileDevice>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+    let device = state
+        .services
+        .master
+        .update_device(&user, &id, payload)
+        .await?;
+    Ok(Json(device))
+}
+
+pub async fn delete_device(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "master.manage").await?;
+    let res = state.services.master.delete_device(&user, &id).await?;
     Ok(Json(res))
 }

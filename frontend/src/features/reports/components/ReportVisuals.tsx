@@ -606,7 +606,7 @@ export const ReportRecommendationsModal: React.FC<ReportRecommendationsModalProp
         },
         {
           title: 'Laporan Valuasi Modal Kerja & Analisis ABC/Pareto',
-          desc: 'Mengelompokkan suku cadang ke dalam Kelas A (80% nilai modal), Kelas B (15%), dan Kelas C (5%) untuk memprioritaskan kontrol modal kerja logistik tambang.',
+          desc: 'Mengelompokkan suku cadang ke dalam Kelas A (80% nilai modal), Kelas B (15%), dan Kelas C (5%) untuk memprioritaskan kontrol modal kerja logistik.',
           charts: 'Grafik Batang Horisontal Valuasi Tertinggi, Donut Chart Komposisi Modal per Kategori',
         },
         {
@@ -623,7 +623,7 @@ export const ReportRecommendationsModal: React.FC<ReportRecommendationsModalProp
       items: [
         {
           title: 'Histori POS Issue dengan 5-Point Traceability (BR-001 s/d BR-004)',
-          desc: 'Kepatuhan mutlak audit: Setiap pengeluaran part tercatat dengan No Unit, HM/KM, Site Tambang, Penerima, dan Mekanik penanggung jawab.',
+          desc: 'Kepatuhan mutlak audit: Setiap pengeluaran part tercatat dengan No Unit, HM/KM, Site, Penerima, dan Mekanik penanggung jawab.',
           charts: 'Timeline Aktivitas Transaksi Harian, Top 5 Unit Teraktif Mengambil Part',
         },
         {
@@ -632,7 +632,7 @@ export const ReportRecommendationsModal: React.FC<ReportRecommendationsModalProp
           charts: 'Grafik Batang Peringkat Unit Terboros (Cost/HM), Perbandingan Tipe Armada',
         },
         {
-          title: 'Distribusi Konsumsi per Site Tambang & Aktivitas Mekanik',
+          title: 'Distribusi Konsumsi per Site & Aktivitas Mekanik',
           desc: 'Memetakan konsumsi suku cadang per pit area (Pit Sorowako, Pit Petea, Workshop Utama) dan akuntabilitas mekanik yang melakukan penggantian.',
           charts: 'Leaderboard Produktivitas Mekanik, Perbandingan Pemakaian per Lokasi Pit',
         },
@@ -670,13 +670,13 @@ export const ReportRecommendationsModal: React.FC<ReportRecommendationsModalProp
           <div>
             <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
               <Sparkles className="w-4 h-4" />
-              <span>Panduan Best Practice Logistik Tambang</span>
+              <span>Panduan Best Practice Logistik</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-white mt-1">
               Rekomendasi Laporan Enterprise WMS LogistikQu
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Daftar arsitektur pelaporan standar pertambangan untuk optimalisasi suku cadang alat berat, dump truck, dan gudang kontainer site.
+              Daftar arsitektur pelaporan standar untuk optimalisasi suku cadang alat berat, dump truck, dan gudang kontainer site.
             </p>
           </div>
           <button

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { toast, confirmDialog } from '../context/ToastContext';
 import { binApi } from '../api';
 import type { WarehouseBinItem } from '../types';
 import {
@@ -147,7 +148,7 @@ export const WarehouseBinsPage: React.FC = () => {
     e.preventDefault();
     const finalCode = binFormCode.trim().toUpperCase();
     if (!finalCode) {
-      alert('Kode Bin wajib diisi!');
+      toast.warning('Kode Bin wajib diisi!');
       return;
     }
 
@@ -158,7 +159,7 @@ export const WarehouseBinsPage: React.FC = () => {
         : binFormZone.trim().toUpperCase();
 
     if (!finalZone) {
-      alert('Nama Zona Kontainer wajib diisi!');
+      toast.warning('Nama Zona Kontainer wajib diisi!');
       return;
     }
 
@@ -169,7 +170,7 @@ export const WarehouseBinsPage: React.FC = () => {
         : binFormLevel.trim().toUpperCase();
 
     if (!finalLevel) {
-      alert('Nama Level Rak wajib diisi!');
+      toast.warning('Nama Level Rak wajib diisi!');
       return;
     }
 
@@ -183,7 +184,7 @@ export const WarehouseBinsPage: React.FC = () => {
           capacity_parts: Number(binFormCapacity) || 10,
           description: binFormDesc.trim() || undefined,
         });
-        alert(res.message);
+        toast.success(res.message);
       } else {
         const res = await binApi.updateBin(activeWarehouse, binModalId, {
           bin_code: finalCode,
@@ -192,26 +193,32 @@ export const WarehouseBinsPage: React.FC = () => {
           capacity_parts: Number(binFormCapacity) || 10,
           description: binFormDesc.trim() || undefined,
         });
-        alert(res.message);
+        toast.success(res.message);
       }
       setShowBinModal(false);
       fetchBins();
     } catch (err: any) {
-      alert(err?.response?.data?.error || err?.response?.data?.message || 'Gagal menyimpan data bin');
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Gagal menyimpan data bin');
     } finally {
       setSavingBin(false);
     }
   };
 
   const handleDeleteBin = async (b: WarehouseBinItem) => {
-    if (!window.confirm(`Hapus atau nonaktifkan Bin "${b.bin_code}"?`)) return;
+    const ok = await confirmDialog({
+      title: 'Hapus / Nonaktifkan Bin Rak',
+      message: `Hapus atau nonaktifkan Bin "${b.bin_code}"?`,
+      confirmText: 'Ya, Hapus Bin',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     try {
       const res = await binApi.deleteBin(activeWarehouse, b.id);
-      alert(res.message);
+      toast.success(res.message);
       fetchBins();
     } catch (err: any) {
-      alert(err?.response?.data?.error || err?.response?.data?.message || 'Gagal menghapus bin');
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Gagal menghapus bin');
     }
   };
 
@@ -231,11 +238,11 @@ export const WarehouseBinsPage: React.FC = () => {
     setRelocating(true);
     try {
       const res = await binApi.relocateStockBin(activeWarehouse, relocatePartId, relocateTargetBin || undefined);
-      alert(res.message);
+      toast.success(res.message);
       setShowRelocateModal(false);
       fetchBins();
     } catch (err: any) {
-      alert(err?.response?.data?.error || err?.response?.data?.message || 'Gagal memindahkan lokasi bin');
+      toast.error(err?.response?.data?.error || err?.response?.data?.message || 'Gagal memindahkan lokasi bin');
     } finally {
       setRelocating(false);
     }

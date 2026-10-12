@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { masterApi } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { confirmDialog } from '../context/ToastContext';
 import {
   canViewFinancials,
   type SparePart,
@@ -9,6 +10,7 @@ import {
   type Site,
   type WarehouseInfo,
   type WarehouseCategory,
+  type MobileDevice,
 } from '../types';
 import {
   Boxes,
@@ -32,9 +34,12 @@ import {
   GitBranch,
   Box,
   Camera,
+  Smartphone,
   QrCode as QrIcon,
+  Eye,
 } from 'lucide-react';
 import { QrCodeView } from '../components/common/QrCodeView';
+import { PhotoUploadZone } from '../components/common/PhotoUploadZone';
 
 export const MasterPage: React.FC = () => {
   const { user } = useAuth();
@@ -43,7 +48,7 @@ export const MasterPage: React.FC = () => {
     user?.role_id === 'SUPER_ADMIN' ||
     user?.permissions?.includes('master.manage');
 
-  const [activeTab, setActiveTab] = useState<'parts' | 'equipment' | 'employees' | 'sites' | 'warehouses'>('parts');
+  const [activeTab, setActiveTab] = useState<'parts' | 'equipment' | 'employees' | 'sites' | 'warehouses' | 'devices'>('parts');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -52,6 +57,21 @@ export const MasterPage: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseInfo[]>([]);
+  const [devices, setDevices] = useState<MobileDevice[]>([]);
+
+  // Mobile Device Modal & Form State
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+  const [deviceModalMode, setDeviceModalMode] = useState<'create' | 'edit'>('create');
+  const [deviceFormId, setDeviceFormId] = useState('');
+  const [deviceFormName, setDeviceFormName] = useState('');
+  const [deviceFormWarehouseId, setDeviceFormWarehouseId] = useState('');
+  const [deviceFormUserId, setDeviceFormUserId] = useState('');
+  const [deviceFormAppVersion, setDeviceFormAppVersion] = useState('2.0.0');
+  const [deviceFormPhotoUrl, setDeviceFormPhotoUrl] = useState('');
+  const [deviceFormQrCode, setDeviceFormQrCode] = useState('');
+  const [deviceFormActive, setDeviceFormActive] = useState(true);
+  const [savingDevice, setSavingDevice] = useState(false);
+  const [selectedDeviceDetail, setSelectedDeviceDetail] = useState<MobileDevice | null>(null);
 
   // Toggle Core Return state
   const [updatingPartId, setUpdatingPartId] = useState<string | null>(null);
@@ -138,6 +158,15 @@ export const MasterPage: React.FC = () => {
         ]);
         setWarehouses(whData);
         setWarehouseCategories(catData);
+      } else if (activeTab === 'devices') {
+        const [devData, whData, empData] = await Promise.all([
+          masterApi.getDevices(),
+          warehouses.length > 0 ? Promise.resolve(warehouses) : masterApi.getWarehouses(),
+          employees.length > 0 ? Promise.resolve(employees) : masterApi.getEmployees(),
+        ]);
+        setDevices(devData);
+        if (warehouses.length === 0) setWarehouses(whData);
+        if (employees.length === 0) setEmployees(empData);
       }
     } catch (err) {
       console.error(err);
@@ -301,7 +330,7 @@ export const MasterPage: React.FC = () => {
     const confirmMsg = nextStatus
       ? `Aktifkan kembali Titik Site "${site.name}"?`
       : `Nonaktifkan Titik Site "${site.name}"?`;
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await confirmDialog(confirmMsg))) return;
 
     try {
       await masterApi.updateSite(site.id, { is_active: nextStatus });
@@ -312,7 +341,11 @@ export const MasterPage: React.FC = () => {
   };
 
   const handleDeleteSite = async (site: Site) => {
-    if (!window.confirm(`Hapus Titik Site "${site.name}" (${site.id})? Jika site memiliki riwayat unit/transaksi, statusnya akan dialihkan ke Non-Aktif.`)) {
+    if (
+      !(await confirmDialog(
+        `Hapus Titik Site "${site.name}" (${site.id})? Jika site memiliki riwayat unit/transaksi, statusnya akan dialihkan ke Non-Aktif.`
+      ))
+    ) {
       return;
     }
 
@@ -461,7 +494,11 @@ export const MasterPage: React.FC = () => {
   };
 
   const handleDeleteCategory = async (cat: WarehouseCategory) => {
-    if (!window.confirm(`Hapus kategori "${cat.name}"? Jika masih ada gudang yang menggunakannya, kategori akan dinonaktifkan (soft delete).`)) {
+    if (
+      !(await confirmDialog(
+        `Hapus kategori "${cat.name}"? Jika masih ada gudang yang menggunakannya, kategori akan dinonaktifkan (soft delete).`
+      ))
+    ) {
       return;
     }
     try {
@@ -479,7 +516,7 @@ export const MasterPage: React.FC = () => {
     const confirmMsg = nextStatus
       ? `Aktifkan kembali Gudang "${wh.name}"?`
       : `Nonaktifkan Gudang "${wh.name}"?`;
-    if (!window.confirm(confirmMsg)) return;
+    if (!(await confirmDialog(confirmMsg))) return;
 
     try {
       await masterApi.updateWarehouse(wh.id, { is_active: nextStatus });
@@ -490,7 +527,11 @@ export const MasterPage: React.FC = () => {
   };
 
   const handleDeleteWarehouse = async (wh: WarehouseInfo) => {
-    if (!window.confirm(`Hapus Gudang "${wh.name}" (${wh.id})? Jika gudang memiliki riwayat stok/transaksi, statusnya akan dialihkan ke Non-Aktif.`)) {
+    if (
+      !(await confirmDialog(
+        `Hapus Gudang "${wh.name}" (${wh.id})? Jika gudang memiliki riwayat stok/transaksi, statusnya akan dialihkan ke Non-Aktif.`
+      ))
+    ) {
       return;
     }
 
@@ -503,7 +544,127 @@ export const MasterPage: React.FC = () => {
     }
   };
 
-  // Filtered lists for Sites and Warehouses
+  // --- MOBILE DEVICE CRUD HANDLERS ---
+  const openCreateDeviceModal = () => {
+    setDeviceModalMode('create');
+    setDeviceFormId('');
+    setDeviceFormName('');
+    setDeviceFormWarehouseId(warehouses[0]?.id || 'WH-CONT-HE');
+    setDeviceFormUserId('');
+    setDeviceFormAppVersion('2.0.0');
+    setDeviceFormPhotoUrl('');
+    setDeviceFormQrCode('');
+    setDeviceFormActive(true);
+    setShowDeviceModal(true);
+  };
+
+  const openEditDeviceModal = (d: MobileDevice) => {
+    setDeviceModalMode('edit');
+    setDeviceFormId(d.device_id);
+    setDeviceFormName(d.device_name);
+    setDeviceFormWarehouseId(d.assigned_warehouse_id || '');
+    setDeviceFormUserId(d.assigned_user_id || '');
+    setDeviceFormAppVersion(d.app_version || '2.0.0');
+    setDeviceFormPhotoUrl(d.photo_url || '');
+    setDeviceFormQrCode(d.qr_code || `DEVICE:${d.device_id}`);
+    setDeviceFormActive(d.is_active);
+    setShowDeviceModal(true);
+  };
+
+  const handleSaveDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deviceFormName.trim()) {
+      alert('Nama Perangkat wajib diisi!');
+      return;
+    }
+    if (deviceModalMode === 'create' && !deviceFormId.trim()) {
+      alert('Device ID wajib diisi!');
+      return;
+    }
+
+    setSavingDevice(true);
+    try {
+      const qrVal = deviceFormQrCode.trim() || `DEVICE:${deviceFormId.trim().toUpperCase()}`;
+      if (deviceModalMode === 'create') {
+        await masterApi.createDevice({
+          device_id: deviceFormId.trim().toUpperCase(),
+          device_name: deviceFormName.trim(),
+          assigned_warehouse_id: deviceFormWarehouseId || null,
+          assigned_user_id: deviceFormUserId || null,
+          app_version: deviceFormAppVersion.trim() || '2.0.0',
+          photo_url: deviceFormPhotoUrl.trim() || null,
+          qr_code: qrVal,
+          is_active: deviceFormActive,
+        });
+        alert(`Perangkat '${deviceFormId.trim().toUpperCase()}' berhasil didaftarkan`);
+      } else {
+        await masterApi.updateDevice(deviceFormId, {
+          device_name: deviceFormName.trim(),
+          assigned_warehouse_id: deviceFormWarehouseId || null,
+          assigned_user_id: deviceFormUserId || null,
+          app_version: deviceFormAppVersion.trim() || '2.0.0',
+          photo_url: deviceFormPhotoUrl.trim() || null,
+          qr_code: qrVal,
+          is_active: deviceFormActive,
+        });
+        alert(`Perangkat '${deviceFormId}' berhasil diperbarui`);
+      }
+      setShowDeviceModal(false);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.response?.data?.message || 'Gagal menyimpan perangkat');
+    } finally {
+      setSavingDevice(false);
+    }
+  };
+
+  const handleToggleDeviceActive = async (d: MobileDevice) => {
+    const nextStatus = !d.is_active;
+    const confirmMsg = nextStatus
+      ? `Aktifkan kembali perangkat '${d.device_id}' (${d.device_name})?`
+      : `Nonaktifkan perangkat '${d.device_id}' (${d.device_name})? Perangkat yang dinonaktifkan tidak dapat melakukan sinkronisasi batch.`;
+    if (!(await confirmDialog(confirmMsg))) return;
+
+    try {
+      await masterApi.updateDevice(d.device_id, { is_active: nextStatus });
+      setDevices(devices.map((item) => (item.device_id === d.device_id ? { ...item, is_active: nextStatus } : item)));
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal mengubah status perangkat');
+    }
+  };
+
+  const handleDeleteDevice = async (d: MobileDevice) => {
+    if (
+      !(await confirmDialog(
+        `Hapus / cabut izin perangkat '${d.device_id}' (${d.device_name})? Jika perangkat memiliki riwayat transaksi offline, perangkat akan dinonaktifkan secara aman.`
+      ))
+    ) {
+      return;
+    }
+    try {
+      const res = await masterApi.deleteDevice(d.device_id);
+      alert(res.message);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Gagal menghapus perangkat');
+    }
+  };
+
+  const formatLastSync = (timestamp?: string | null) => {
+    if (!timestamp) return 'Belum pernah sync';
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Belum pernah sync';
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Baru saja (< 1 mnt)';
+    if (diffMins < 60) return `${diffMins} menit lalu`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} hari lalu (${date.toLocaleDateString('id-ID')})`;
+  };
+
+  // Filtered lists for Sites, Warehouses, and Devices
   const filteredSites = sites.filter(
     (s) =>
       !search ||
@@ -522,16 +683,26 @@ export const MasterPage: React.FC = () => {
       (w.description && w.description.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const filteredDevices = devices.filter(
+    (d) =>
+      !search ||
+      d.device_id.toLowerCase().includes(search.toLowerCase()) ||
+      d.device_name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.assigned_warehouse_id && d.assigned_warehouse_id.toLowerCase().includes(search.toLowerCase())) ||
+      (d.assigned_warehouse_name && d.assigned_warehouse_name.toLowerCase().includes(search.toLowerCase())) ||
+      (d.assigned_user_name && d.assigned_user_name.toLowerCase().includes(search.toLowerCase()))
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
           <Boxes className="w-7 h-7 text-cyan-400" />
-          Master Data Operasional Tambang
+          Master Data Operasional
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Katalog referensi suku cadang (aturan Core Return), armada alat berat, personil mekanik, titik site penambangan, dan konfigurasi gudang SJS-VIPO.
+          Katalog referensi suku cadang (aturan Core Return), armada alat berat, personil mekanik, titik site operasional, dan konfigurasi gudang SJS-VIPO.
         </p>
       </div>
 
@@ -603,6 +774,19 @@ export const MasterPage: React.FC = () => {
           >
             <Building2 className="w-4 h-4" /> Daftar Gudang ({warehouses.length})
           </button>
+          <button
+            onClick={() => {
+              setActiveTab('devices');
+              setSearch('');
+            }}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2 ${
+              activeTab === 'devices'
+                ? 'bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" /> Perangkat Mobile ({devices.length})
+          </button>
         </div>
 
         {/* Action Buttons for Tabs */}
@@ -661,6 +845,17 @@ export const MasterPage: React.FC = () => {
               </button>
             </div>
           )}
+
+          {activeTab === 'devices' && canManageMaster && (
+            <button
+              type="button"
+              onClick={openCreateDeviceModal}
+              className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Tambah Perangkat Mobile</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -680,6 +875,8 @@ export const MasterPage: React.FC = () => {
               ? 'Cari nama karyawan atau posisi...'
               : activeTab === 'sites'
               ? 'Cari nama titik site, kode site...'
+              : activeTab === 'devices'
+              ? 'Cari device ID (e.g. ANDROID-WH-001), nama perangkat, gudang...'
               : 'Cari nama gudang, kode gudang, kategori...'
           }
           className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 focus:outline-none"
@@ -1182,7 +1379,7 @@ export const MasterPage: React.FC = () => {
                   </div>
 
                   <p className="text-xs text-slate-400 mt-2">
-                    {wh.description || 'Gudang operasional inventori suku cadang pertambangan SJS-VIPO.'}
+                    {wh.description || 'Gudang operasional inventori suku cadang SJS-VIPO.'}
                   </p>
                 </div>
 
@@ -1230,6 +1427,194 @@ export const MasterPage: React.FC = () => {
           {filteredWarehouses.length === 0 && (
             <div className="glass-card p-12 text-center text-slate-400 rounded-2xl border border-slate-800">
               Tidak ada gudang yang sesuai dengan kriteria pencarian.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB CONTENT: MOBILE DEVICES */}
+      {activeTab === 'devices' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5 text-cyan-400" />
+              <h2 className="text-base font-bold text-white">Daftar Master Perangkat Mobile & Handheld SJS</h2>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                {filteredDevices.length} Perangkat Terdaftar
+              </span>
+            </div>
+            {!canManageMaster && (
+              <span className="text-xs text-slate-400 italic flex items-center gap-1">
+                <Info className="w-3.5 h-3.5" /> Hanya Super Admin / Manager yang dapat mendaftarkan atau mengubah perangkat
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredDevices.map((dev) => {
+              const lastSyncText = formatLastSync(dev.last_sync_at);
+              const isRecentlyActive = dev.last_sync_at
+                ? Date.now() - new Date(dev.last_sync_at).getTime() < 15 * 60 * 1000
+                : false;
+
+              return (
+                <div
+                  key={dev.device_id}
+                  className="glass-card p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700 transition flex flex-col justify-between space-y-4"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        {/* Device Photo Thumbnail */}
+                        <div
+                          onClick={() => setSelectedDeviceDetail(dev)}
+                          className="w-12 h-12 rounded-xl border border-slate-700 bg-slate-900/80 shrink-0 overflow-hidden cursor-pointer hover:border-cyan-500/60 transition flex items-center justify-center group"
+                          title="Klik untuk melihat detail & foto"
+                        >
+                          {dev.photo_url ? (
+                            <img
+                              src={dev.photo_url}
+                              alt={dev.device_name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                            />
+                          ) : (
+                            <Smartphone className="w-6 h-6 text-slate-500 group-hover:text-cyan-400 transition" />
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/60">
+                              {dev.device_id}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded">
+                              v{dev.app_version || '2.0.0'}
+                            </span>
+                          </div>
+                          <h3
+                            onClick={() => setSelectedDeviceDetail(dev)}
+                            className="text-sm font-bold text-slate-100 mt-1 line-clamp-1 hover:text-cyan-400 cursor-pointer transition"
+                            title={dev.device_name}
+                          >
+                            {dev.device_name}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border flex items-center gap-1 shrink-0 ${
+                          dev.is_active
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        }`}
+                      >
+                        {dev.is_active ? <CheckCircle className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+                        {dev.is_active ? 'Aktif' : 'Non-Aktif'}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-800/60 space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-slate-400">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-slate-500" /> Gudang Penugasan:
+                        </span>
+                        <span className="font-medium text-slate-200">
+                          {dev.assigned_warehouse_name
+                            ? `${dev.assigned_warehouse_id} (${dev.assigned_warehouse_name})`
+                            : dev.assigned_warehouse_id || '-'}
+                        </span>
+                      </div>
+
+                      {dev.assigned_user_name && (
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span className="flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-slate-500" /> Penanggung Jawab:
+                          </span>
+                          <span className="font-medium text-slate-200">{dev.assigned_user_name}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/40">
+                        <span className="flex items-center gap-1.5">
+                          {isRecentlyActive ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                          ) : (
+                            <span className="h-2 w-2 rounded-full bg-slate-500"></span>
+                          )}
+                          Status Terakhir Online:
+                        </span>
+                        <span
+                          className={`font-mono text-[11px] ${
+                            isRecentlyActive ? 'text-emerald-400 font-bold' : 'text-slate-400'
+                          }`}
+                        >
+                          {lastSyncText}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Action Footer */}
+                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs gap-2">
+                    {/* Tombol Detail Perangkat */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeviceDetail(dev)}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-400 hover:text-cyan-300 border border-cyan-800/40 font-semibold flex items-center gap-1.5 transition"
+                      title="Lihat Detail & QR Code Perangkat"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Detail</span>
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {canManageMaster && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDeviceActive(dev)}
+                            className={`p-1.5 rounded-lg border transition ${
+                              dev.is_active
+                                ? 'text-amber-300 border-amber-500/30 hover:bg-amber-500/15'
+                                : 'text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/15'
+                            }`}
+                            title={dev.is_active ? 'Nonaktifkan Perangkat' : 'Aktifkan Perangkat'}
+                          >
+                            {dev.is_active ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openEditDeviceModal(dev)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                            title="Edit Perangkat"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDevice(dev)}
+                            className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/40 transition"
+                            title="Hapus / Nonaktifkan Perangkat"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredDevices.length === 0 && (
+            <div className="glass-card p-12 text-center text-slate-400 rounded-2xl border border-slate-800">
+              Tidak ada perangkat mobile yang sesuai dengan kriteria pencarian.
             </div>
           )}
         </div>
@@ -1466,7 +1851,7 @@ export const MasterPage: React.FC = () => {
                 <label className="block text-slate-400 mb-1">Deskripsi / Detail Lokasi</label>
                 <textarea
                   rows={3}
-                  placeholder="Area tambang operasional Blok D SJS-VIPO..."
+                  placeholder="Area operasional Blok D SJS-VIPO..."
                   value={siteFormDesc}
                   onChange={(e) => setSiteFormDesc(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none resize-none"
@@ -1881,6 +2266,354 @@ export const MasterPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowCategoryModal(false)}
                 className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DEVICE (CREATE / EDIT) */}
+      {showDeviceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Smartphone className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-white">
+                  {deviceModalMode === 'create' ? 'Tambah Perangkat Mobile Baru' : 'Edit Perangkat Mobile'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeviceModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDevice} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 mb-1">Device ID (Unik) *</label>
+                <input
+                  type="text"
+                  required
+                  disabled={deviceModalMode === 'edit'}
+                  placeholder="Contoh: ANDROID-WH-003 atau TAB-MEK-01"
+                  value={deviceFormId}
+                  onChange={(e) => setDeviceFormId(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono uppercase focus:border-cyan-500 focus:outline-none disabled:opacity-50 disabled:bg-slate-950"
+                />
+                {deviceModalMode === 'create' && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    ID ini akan dicatat pada aplikasi Android dan menjadi pengenal saat sinkronisasi offline.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Nama / Model Perangkat *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Zebra TC57 Handheld Kontainer Sorowako"
+                  value={deviceFormName}
+                  onChange={(e) => setDeviceFormName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Gudang Penugasan</label>
+                <select
+                  value={deviceFormWarehouseId}
+                  onChange={(e) => setDeviceFormWarehouseId(e.target.value)}
+                  className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="">-- Tanpa Penugasan Gudang --</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.id} - {w.name} ({w.warehouse_type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Penanggung Jawab / Karyawan (Opsional)</label>
+                <select
+                  value={deviceFormUserId}
+                  onChange={(e) => setDeviceFormUserId(e.target.value)}
+                  className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="">-- Tanpa Penanggung Jawab Khusus --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} {emp.position ? `(${emp.position})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1">Versi Aplikasi (Default: 2.0.0)</label>
+                <input
+                  type="text"
+                  placeholder="2.0.0"
+                  value={deviceFormAppVersion}
+                  onChange={(e) => setDeviceFormAppVersion(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+
+              <PhotoUploadZone
+                value={deviceFormPhotoUrl}
+                onChange={setDeviceFormPhotoUrl}
+                label="Foto Fisik Perangkat Hardware"
+                helperText="Pilih dari folder laptop/PC, atau ambil gambar langsung jika memakai Handphone"
+              />
+
+              <div>
+                <label className="block text-slate-400 mb-1">Kode QR / Barcode Stiker Aset (Opsional)</label>
+                <input
+                  type="text"
+                  placeholder={`DEVICE:${deviceFormId || 'ANDROID-WH-XXX'}`}
+                  value={deviceFormQrCode}
+                  onChange={(e) => setDeviceFormQrCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:border-cyan-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Format default: DEVICE:ID_PERANGKAT (digunakan untuk cetak label stiker aset).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="device_active_checkbox"
+                  checked={deviceFormActive}
+                  onChange={(e) => setDeviceFormActive(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0"
+                />
+                <label htmlFor="device_active_checkbox" className="text-slate-300 cursor-pointer">
+                  Perangkat Aktif & Diizinkan Sinkronisasi Batch
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowDeviceModal(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDevice}
+                  className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold disabled:opacity-50"
+                >
+                  {savingDevice
+                    ? 'Menyimpan...'
+                    : deviceModalMode === 'create'
+                    ? 'Simpan Perangkat'
+                    : 'Perbarui Perangkat'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETAIL PERANGKAT MOBILE */}
+      {selectedDeviceDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="glass-panel w-full max-w-2xl rounded-2xl border border-cyan-500/40 p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950/60 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-cyan-400 bg-cyan-950/50 px-2.5 py-0.5 rounded border border-cyan-800/60">
+                      {selectedDeviceDetail.device_id}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border flex items-center gap-1 ${
+                        selectedDeviceDetail.is_active
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                          : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                      }`}
+                    >
+                      {selectedDeviceDetail.is_active ? <CheckCircle className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+                      {selectedDeviceDetail.is_active ? 'Aktif & Diizinkan Sync' : 'Non-Aktif (Dicabut)'}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-white mt-1">{selectedDeviceDetail.device_name}</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDeviceDetail(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: 2 Columns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Kolom Kiri: Foto Perangkat & QR Code */}
+              <div className="space-y-4">
+                {/* Foto Perangkat */}
+                <div className="glass-card p-4 rounded-xl border border-slate-800/80 space-y-2">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-cyan-400" /> Foto Fisik Perangkat
+                  </span>
+                  {selectedDeviceDetail.photo_url ? (
+                    <div className="relative group overflow-hidden rounded-xl border border-slate-700 bg-slate-900 aspect-video flex items-center justify-center">
+                      <img
+                        src={selectedDeviceDetail.photo_url}
+                        alt={selectedDeviceDetail.device_name}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/50 p-6 text-center space-y-2">
+                      <Smartphone className="w-8 h-8 text-slate-600 mx-auto" />
+                      <p className="text-xs text-slate-400">Belum ada foto fisik perangkat.</p>
+                      {canManageMaster && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dev = selectedDeviceDetail;
+                            setSelectedDeviceDetail(null);
+                            openEditDeviceModal(dev);
+                          }}
+                          className="text-[11px] text-cyan-400 hover:underline font-semibold"
+                        >
+                          + Tambah Foto via Edit
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* QR Code Aset & Stiker Print */}
+                <div className="glass-card p-4 rounded-xl border border-slate-800/80 space-y-3">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <QrIcon className="w-4 h-4 text-cyan-400" /> Label QR Code / Barcode Aset
+                  </span>
+                  <div className="flex justify-center bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <QrCodeView
+                      value={selectedDeviceDetail.qr_code || `DEVICE:${selectedDeviceDetail.device_id}`}
+                      size={150}
+                      title={selectedDeviceDetail.device_id}
+                      subtitle={selectedDeviceDetail.device_name}
+                      warehouseName={selectedDeviceDetail.assigned_warehouse_name || selectedDeviceDetail.assigned_warehouse_id || 'Belum Ditugaskan'}
+                      showActions={true}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Kolom Kanan: Rincian Spesifikasi & Heartbeat */}
+              <div className="space-y-3">
+                <div className="glass-card p-4 rounded-xl border border-slate-800/80 space-y-3 text-xs">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-cyan-400" /> Informasi Teknis & Audit
+                  </span>
+
+                  <div className="space-y-2.5 pt-1">
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Device ID:</span>
+                      <span className="font-mono font-bold text-cyan-400">{selectedDeviceDetail.device_id}</span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Model / Nama:</span>
+                      <span className="font-semibold text-slate-200 text-right">{selectedDeviceDetail.device_name}</span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Gudang Penugasan:</span>
+                      <span className="font-medium text-slate-200 text-right">
+                        {selectedDeviceDetail.assigned_warehouse_name
+                          ? `${selectedDeviceDetail.assigned_warehouse_id} - ${selectedDeviceDetail.assigned_warehouse_name}`
+                          : selectedDeviceDetail.assigned_warehouse_id || 'Tidak Ditugaskan'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Penanggung Jawab:</span>
+                      <span className="font-medium text-slate-200 text-right">
+                        {selectedDeviceDetail.assigned_user_name || 'Umum / Pool Lapangan'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Versi LogistikQu Android:</span>
+                      <span className="font-mono text-slate-300">v{selectedDeviceDetail.app_version || '2.0.0'}</span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Isi QR Code Text:</span>
+                      <span className="font-mono text-[11px] text-slate-400 text-right break-all">
+                        {selectedDeviceDetail.qr_code || `DEVICE:${selectedDeviceDetail.device_id}`}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5 border-b border-slate-800/60">
+                      <span className="text-slate-400">Terakhir Sinkronisasi:</span>
+                      <span className="font-mono font-medium text-cyan-300 text-right">
+                        {formatLastSync(selectedDeviceDetail.last_sync_at)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-slate-400">Didaftarkan Pada:</span>
+                      <span className="text-slate-300 font-mono text-[11px]">
+                        {new Date(selectedDeviceDetail.created_at).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Callout */}
+                <div className="bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3 text-[11px] text-cyan-300 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Pemasangan Stiker Aset
+                  </div>
+                  <p className="text-cyan-200/80 leading-relaxed">
+                    Cetak QR Code di samping menggunakan printer label tahan cuaca (thermal/laminated) dan tempelkan pada bagian belakang tablet/handheld sebagai tanda registrasi resmi inventaris IT SJS-VIPO.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+              {canManageMaster && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dev = selectedDeviceDetail;
+                    setSelectedDeviceDetail(null);
+                    openEditDeviceModal(dev);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Edit Perangkat
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedDeviceDetail(null)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold ml-auto"
               >
                 Tutup
               </button>

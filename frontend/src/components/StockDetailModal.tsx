@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { InventoryStockItem, StockMovement, WarehouseBinItem } from '../types';
 import { canViewFinancials } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { confirmDialog } from '../context/ToastContext';
 import { inventoryApi } from '../api';
 import { QrCodeView } from './common/QrCodeView';
 import {
   X,
   Camera,
+  FolderOpen,
   Upload,
   Link,
   History,
@@ -58,6 +60,7 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
   const [showFullImage, setShowFullImage] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch recent movements for the mini ledger
   useEffect(() => {
@@ -145,7 +148,13 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
 
   // Remove photo
   const handleRemovePhoto = async () => {
-    if (!window.confirm('Hapus foto suku cadang ini?')) return;
+    const ok = await confirmDialog({
+      title: 'Hapus Foto Suku Cadang',
+      message: 'Hapus foto suku cadang ini dari katalog?',
+      confirmText: 'Ya, Hapus Foto',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setSavingPhoto(true);
     setPhotoMessage(null);
     try {
@@ -339,14 +348,34 @@ export const StockDetailModal: React.FC<StockDetailModalProps> = ({
                         className="hidden"
                         onChange={handlePhotoFileSelect}
                       />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-2.5 px-3 rounded-lg border border-dashed border-cyan-500/50 hover:border-cyan-400 bg-cyan-950/20 text-cyan-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition"
-                      >
-                        <Camera className="w-4 h-4" />
-                        <span>Pilih Foto dari Perangkat / Kamera</span>
-                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        ref={cameraInputRef}
+                        className="hidden"
+                        onChange={handlePhotoFileSelect}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="py-2.5 px-3 rounded-lg border border-dashed border-cyan-500/50 hover:border-cyan-400 bg-cyan-950/20 text-cyan-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                          title="Buka folder komputer/laptop atau galeri"
+                        >
+                          <FolderOpen className="w-4 h-4 text-cyan-400" />
+                          <span>Pilih Folder / File</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="py-2.5 px-3 rounded-lg border border-dashed border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20 text-emerald-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                          title="Ambil foto langsung via kamera HP"
+                        >
+                          <Camera className="w-4 h-4 text-emerald-400" />
+                          <span>Ambil Kamera HP</span>
+                        </button>
+                      </div>
                       {tempPhotoUrl && (
                         <div className="flex items-center gap-2 text-[11px] text-emerald-400">
                           <CheckCircle2 className="w-3.5 h-3.5" />

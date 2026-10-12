@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.unit_number,\n                t.unit_name,\n                t.unit_type,\n                COUNT(DISTINCT t.id)::bigint as total_tx,\n                COALESCE(SUM(i.qty), 0) as total_qty\n            FROM issue_transactions t\n            JOIN issue_transaction_items i ON t.id = i.transaction_id\n            WHERE t.status = 'COMPLETED'\n              AND t.warehouse_id = ANY($1)\n            GROUP BY t.unit_number, t.unit_name, t.unit_type\n            ORDER BY total_qty DESC\n            LIMIT 100\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "unit_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "unit_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_tx",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_qty",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "6831b82d2b2108f3321e4870ca025a7369c468f3382b57d3c3deaaa16a711dd4"
+}

@@ -97,9 +97,18 @@ impl IssueService {
         };
 
         let priority = payload.priority.unwrap_or_else(|| "NORMAL".to_string());
+        let signature_type = payload
+            .signature_type
+            .unwrap_or_else(|| "DIGITAL".to_string());
+        let receipt_printed = payload.receipt_printed.unwrap_or(false);
+        let receipt_printed_at = if receipt_printed {
+            Some(chrono::Utc::now())
+        } else {
+            None
+        };
 
         // Insert issue header
-        let issue_id = sqlx::query_scalar!(
+        let issue_id: Uuid = sqlx::query_scalar(
             r#"
             INSERT INTO issue_transactions (
                 transaction_number, warehouse_id, site_id, receiver_name,
@@ -107,40 +116,48 @@ impl IssueService {
                 unit_type, ct_number, serial_number, hm_km, mechanic_name,
                 mechanic_id, work_order_number, maintenance_type, priority,
                 status, notes, latitude, longitude, device_id, client_uuid,
-                evidence_photo_url, document_url, created_by
+                evidence_photo_url, document_url,
+                mechanic_signature_url, signature_type, receipt_printed, receipt_printed_at, signed_receipt_photo_url,
+                created_by
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+                $26, $27, $28, $29, $30, $31
             )
             RETURNING id
             "#,
-            transaction_no,
-            payload.warehouse_id,
-            payload.site_id,
-            payload.receiver_name,
-            payload.receiver_employee_id,
-            payload.receiver_department,
-            payload.unit_number,
-            payload.unit_name,
-            payload.unit_type,
-            payload.ct_number,
-            payload.serial_number,
-            payload.hm_km,
-            payload.mechanic_name,
-            payload.mechanic_id,
-            payload.work_order_number,
-            payload.maintenance_type,
-            priority,
-            status,
-            payload.notes,
-            payload.latitude,
-            payload.longitude,
-            payload.device_id,
-            payload.client_uuid,
-            payload.evidence_photo_url,
-            payload.document_url,
-            claims.sub
         )
+        .bind(&transaction_no)
+        .bind(&payload.warehouse_id)
+        .bind(&payload.site_id)
+        .bind(&payload.receiver_name)
+        .bind(&payload.receiver_employee_id)
+        .bind(&payload.receiver_department)
+        .bind(&payload.unit_number)
+        .bind(&payload.unit_name)
+        .bind(&payload.unit_type)
+        .bind(&payload.ct_number)
+        .bind(&payload.serial_number)
+        .bind(&payload.hm_km)
+        .bind(&payload.mechanic_name)
+        .bind(&payload.mechanic_id)
+        .bind(&payload.work_order_number)
+        .bind(&payload.maintenance_type)
+        .bind(&priority)
+        .bind(&status)
+        .bind(&payload.notes)
+        .bind(&payload.latitude)
+        .bind(&payload.longitude)
+        .bind(&payload.device_id)
+        .bind(&payload.client_uuid)
+        .bind(&payload.evidence_photo_url)
+        .bind(&payload.document_url)
+        .bind(&payload.mechanic_signature_url)
+        .bind(&signature_type)
+        .bind(receipt_printed)
+        .bind(receipt_printed_at)
+        .bind(&payload.signed_receipt_photo_url)
+        .bind(claims.sub)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -286,6 +303,9 @@ impl IssueService {
                 "issue_id": issue_id,
                 "transaction_number": transaction_no,
                 "status": status,
+                "signature_type": signature_type,
+                "mechanic_signature_url": payload.mechanic_signature_url,
+                "receipt_printed": receipt_printed,
                 "message": msg
             }),
         })
@@ -299,14 +319,15 @@ impl IssueService {
     ) -> Result<Vec<IssueTransaction>, AppError> {
         let search_pattern = format!("%{}%", search);
 
-        let items = sqlx::query_as!(
-            IssueTransaction,
+        let items = sqlx::query_as::<_, IssueTransaction>(
             r#"
             SELECT id, transaction_number, warehouse_id, site_id, receiver_name,
                    receiver_employee_id, receiver_department, unit_number, unit_name,
                    unit_type, ct_number, serial_number, hm_km, mechanic_name,
                    mechanic_id, work_order_number, maintenance_type, priority,
-                   status, notes, evidence_photo_url, document_url, created_by, approved_by, created_at
+                   status, notes, evidence_photo_url, document_url,
+                   mechanic_signature_url, signature_type, receipt_printed, receipt_printed_at, signed_receipt_photo_url,
+                   created_by, approved_by, created_at
             FROM issue_transactions
             WHERE warehouse_id = $1
               AND ($2 = '' OR transaction_number ILIKE $3 OR unit_number ILIKE $3 OR mechanic_name ILIKE $3)
@@ -314,15 +335,64 @@ impl IssueService {
             ORDER BY created_at DESC
             LIMIT 100
             "#,
-            warehouse_id,
-            search,
-            search_pattern,
-            status
         )
+        .bind(warehouse_id)
+        .bind(search)
+        .bind(&search_pattern)
+        .bind(status)
         .fetch_all(&self.pool)
         .await?;
 
         Ok(items)
+    }
+
+    pub async fn record_receipt_printed(
+        &self,
+        claims: &Claims,
+        id: Uuid,
+        signed_receipt_photo_url: Option<String>,
+    ) -> Result<Value, AppError> {
+        let rows_affected = sqlx::query(
+            r#"
+            UPDATE issue_transactions
+            SET receipt_printed = TRUE,
+                receipt_printed_at = COALESCE(receipt_printed_at, NOW()),
+                signed_receipt_photo_url = COALESCE($2, signed_receipt_photo_url)
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(&signed_receipt_photo_url)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            return Err(AppError::NotFound(
+                "Transaksi pengeluaran tidak ditemukan".to_string(),
+            ));
+        }
+
+        let _ = self
+            .audit_repo
+            .record_log(
+                Some(claims.sub),
+                Some(&claims.username),
+                "PRINT_RECEIPT",
+                "ISSUE_TRANSACTION",
+                Some(&id.to_string()),
+                Some(json!({
+                    "receipt_printed": true,
+                    "has_signed_photo": signed_receipt_photo_url.is_some()
+                })),
+            )
+            .await;
+
+        Ok(json!({
+            "success": true,
+            "message": "Struk bukti pengeluaran berhasil dicatat sebagai telah dicetak",
+            "receipt_printed": true
+        }))
     }
 
     pub async fn get_issue_detail(&self, id: Uuid) -> Result<Value, AppError> {

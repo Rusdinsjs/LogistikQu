@@ -68,8 +68,9 @@ TOKEN_SPV_HE=$(login_as "supervisor_he")
 TOKEN_SPV_DT=$(login_as "supervisor_dt")
 TOKEN_MAIN_HE=$(login_as "admin_main_he")
 TOKEN_CONT_HE=$(login_as "admin_cont_he")
+TOKEN_MEKANIK_HE=$(login_as "mekanik_he")
 
-if [ -z "$TOKEN_SUPERADMIN" ] || [ -z "$TOKEN_SPV_HE" ] || [ -z "$TOKEN_CONT_HE" ]; then
+if [ -z "$TOKEN_SUPERADMIN" ] || [ -z "$TOKEN_SPV_HE" ] || [ -z "$TOKEN_CONT_HE" ] || [ -z "$TOKEN_MEKANIK_HE" ]; then
     echo -e "${RED}[FAIL] Gagal login akun pengujian!${NC}"
     exit 1
 fi
@@ -86,14 +87,15 @@ import sys, json
 
 roles = json.loads('''$ROLES_JSON''')
 expected = {
-    'SUPER_ADMIN': 27,
-    'MANAGER': 27,
-    'SUPERVISOR_HE': 14,
-    'SUPERVISOR_DT': 14,
+    'SUPER_ADMIN': 31,
+    'MANAGER': 31,
+    'SUPERVISOR_HE': 17,
+    'SUPERVISOR_DT': 17,
     'MAIN_ADMIN_HE': 11,
     'MAIN_ADMIN_DT': 11,
     'CONTAINER_ADMIN_HE': 15,
     'CONTAINER_ADMIN_DT': 15,
+    'MECHANIC': 4,
 }
 
 roles_map = {r['id']: len(r.get('permissions', [])) for r in roles}
@@ -111,7 +113,7 @@ for code, exp_count in expected.items():
 if not all_ok:
     sys.exit(1)
 "
-echo -e "${GREEN}[OK] Seluruh 8 peran memiliki alokasi izin sesuai standar PRD.${NC}"
+echo -e "${GREEN}[OK] Seluruh peran memiliki alokasi izin sesuai standar PRD dan Matriks Terkini.${NC}"
 
 # 4. Uji Coba Zero-Trust Endpoint Enforcement (403 vs Authorized)
 echo -e "\n${YELLOW}--- 3. Uji Coba Perlindungan Endpoint Zero-Trust (403 Forbidden vs Allowed) ---${NC}"
@@ -185,6 +187,122 @@ if [ "$STATUS_SPV_ROLES" -eq 403 ]; then
     echo -e "${GREEN}[PASS: 403 Forbidden]${NC}"
 else
     echo -e "${RED}[FAIL: Mendapat $STATUS_SPV_ROLES bukannya 403]${NC}"
+    exit 1
+fi
+
+# Test 3.5: Akses Permohonan Mekanik (Instruksi #2: Admin Kontainer Ditolak 403, Mekanik & Supervisor Boleh 200)
+echo -n "  [TEST] Akses Permohonan Mekanik (GET /api/v1/mechanic-requests) oleh Admin Kontainer HE (harus 403)... "
+STATUS_CONT_MECH_GET=$(curl -s -o /dev/null -w "%{http_code}" -X GET http://127.0.0.1:8080/api/v1/mechanic-requests \
+    -H "Authorization: Bearer $TOKEN_CONT_HE")
+if [ "$STATUS_CONT_MECH_GET" -eq 403 ]; then
+    echo -e "${GREEN}[PASS: 403 Forbidden]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_CONT_MECH_GET bukannya 403]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Input Permohonan Mekanik (POST /api/v1/mechanic-requests) oleh Admin Kontainer HE (harus 403)... "
+STATUS_CONT_MECH_POST=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/mechanic-requests \
+    -H "Authorization: Bearer $TOKEN_CONT_HE" \
+    -H "Content-Type: application/json" \
+    -d '{"warehouse_id":"WH-CONT-HE","request_type":"REPLACEMENT","unit_number":"DT-001","items":[]}')
+if [ "$STATUS_CONT_MECH_POST" -eq 403 ]; then
+    echo -e "${GREEN}[PASS: 403 Forbidden]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_CONT_MECH_POST bukannya 403]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Akses Permohonan Mekanik oleh Mekanik HE (harus 200)... "
+STATUS_MECH_GET=$(curl -s -o /dev/null -w "%{http_code}" -X GET http://127.0.0.1:8080/api/v1/mechanic-requests \
+    -H "Authorization: Bearer $TOKEN_MEKANIK_HE")
+if [ "$STATUS_MECH_GET" -eq 200 ]; then
+    echo -e "${GREEN}[PASS: 200 OK]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_MECH_GET bukannya 200]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Akses Permohonan Mekanik oleh Supervisor HE (harus 200)... "
+STATUS_SPV_MECH_GET=$(curl -s -o /dev/null -w "%{http_code}" -X GET http://127.0.0.1:8080/api/v1/mechanic-requests \
+    -H "Authorization: Bearer $TOKEN_SPV_HE")
+if [ "$STATUS_SPV_MECH_GET" -eq 200 ]; then
+    echo -e "${GREEN}[PASS: 200 OK]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_SPV_MECH_GET bukannya 200]${NC}"
+    exit 1
+fi
+
+# Test 3.6: Quick Add Master Data (Instruksi #3 & #4)
+RAND_ID=$((1000 + RANDOM % 9000))
+echo -n "  [TEST] Admin Kontainer HE Quick-Add Unit Equipment (POST /api/v1/master/equipment, harus 200/201)... "
+STATUS_CONT_ADD_EQ=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/master/equipment \
+    -H "Authorization: Bearer $TOKEN_CONT_HE" \
+    -H "Content-Type: application/json" \
+    -d "{\"unit_number\":\"EQ-CONT-$RAND_ID\",\"name\":\"Excavator Test $RAND_ID\",\"equipment_type_id\":\"HEAVY_EQUIPMENT\",\"current_hm_km\":1200.0}")
+if [ "$STATUS_CONT_ADD_EQ" -eq 200 ] || [ "$STATUS_CONT_ADD_EQ" -eq 201 ]; then
+    echo -e "${GREEN}[PASS: $STATUS_CONT_ADD_EQ Allowed]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_CONT_ADD_EQ]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Admin Kontainer HE Quick-Add Mekanik / Karyawan (POST /api/v1/master/employees, harus 200/201)... "
+STATUS_CONT_ADD_EMP=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/master/employees \
+    -H "Authorization: Bearer $TOKEN_CONT_HE" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\":\"EMP-CONT-$RAND_ID\",\"name\":\"Mekanik Lapangan $RAND_ID\",\"position\":\"Mechanic Specialist\"}")
+if [ "$STATUS_CONT_ADD_EMP" -eq 200 ] || [ "$STATUS_CONT_ADD_EMP" -eq 201 ]; then
+    echo -e "${GREEN}[PASS: $STATUS_CONT_ADD_EMP Allowed]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_CONT_ADD_EMP]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Mekanik HE Quick-Add Unit Equipment (POST /api/v1/master/equipment, harus 200/201)... "
+STATUS_MECH_ADD_EQ=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/master/equipment \
+    -H "Authorization: Bearer $TOKEN_MEKANIK_HE" \
+    -H "Content-Type: application/json" \
+    -d "{\"unit_number\":\"EQ-MECH-$RAND_ID\",\"name\":\"Hauler Test $RAND_ID\",\"equipment_type_id\":\"HEAVY_EQUIPMENT\",\"current_hm_km\":850.0}")
+if [ "$STATUS_MECH_ADD_EQ" -eq 200 ] || [ "$STATUS_MECH_ADD_EQ" -eq 201 ]; then
+    echo -e "${GREEN}[PASS: $STATUS_MECH_ADD_EQ Allowed]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_MECH_ADD_EQ]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Mekanik HE Quick-Add Mekanik (POST /api/v1/master/employees, harus 403 Forbidden)... "
+STATUS_MECH_ADD_EMP=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/master/employees \
+    -H "Authorization: Bearer $TOKEN_MEKANIK_HE" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\":\"EMP-MECH-$RAND_ID\",\"name\":\"Illegal Mech $RAND_ID\",\"position\":\"Mechanic\"}")
+if [ "$STATUS_MECH_ADD_EMP" -eq 403 ]; then
+    echo -e "${GREEN}[PASS: 403 Forbidden]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_MECH_ADD_EMP bukannya 403]${NC}"
+    exit 1
+fi
+
+# Test 3.7: Monitoring Core Return BR-004 oleh Mekanik (Mekanik boleh GET 200, dilarang modifikasi/receive 403)
+echo -n "  [TEST] Mekanik HE akses Tanggungan Core Return (GET /api/v1/returns, harus 200)... "
+STATUS_MECH_RETURNS_GET=$(curl -s -o /dev/null -w "%{http_code}" -X GET http://127.0.0.1:8080/api/v1/returns \
+    -H "Authorization: Bearer $TOKEN_MEKANIK_HE")
+if [ "$STATUS_MECH_RETURNS_GET" -eq 200 ]; then
+    echo -e "${GREEN}[PASS: 200 OK]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_MECH_RETURNS_GET bukannya 200]${NC}"
+    exit 1
+fi
+
+echo -n "  [TEST] Mekanik HE coba terima retur loket (POST /receive-container, harus 403)... "
+STATUS_MECH_RECEIVE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/returns/00000000-0000-0000-0000-000000000001/receive-container \
+    -H "Authorization: Bearer $TOKEN_MEKANIK_HE" \
+    -H "Content-Type: application/json" \
+    -d '{"notes":"illegal"}')
+if [ "$STATUS_MECH_RECEIVE" -eq 403 ]; then
+    echo -e "${GREEN}[PASS: 403 Forbidden]${NC}"
+else
+    echo -e "${RED}[FAIL: Mendapat $STATUS_MECH_RECEIVE bukannya 403]${NC}"
     exit 1
 fi
 

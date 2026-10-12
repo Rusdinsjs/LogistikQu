@@ -38,6 +38,12 @@ import { Badge, TableSkeleton } from '../components/common';
 import { exportToExcel } from '../utils/exportExcel';
 import { printOrExportPdf } from '../utils/exportPdf';
 import {
+  getUserFleetCategory,
+  isUnitNumberInCategory,
+  isWarehouseInCategory,
+  isDumpTruckUnitRaw,
+} from '../utils/fleetCategory';
+import {
   ReportKpiCard,
   HorizontalBarChart,
   DonutChart,
@@ -70,6 +76,7 @@ type ViewMode = 'both' | 'charts' | 'table';
 export const ReportsPage: React.FC = () => {
   const { user, activeWarehouse } = useAuth();
   const hasFinancialAccess = canViewFinancials(user);
+  const userDivision = getUserFleetCategory(user);
   const [category, setCategory] = useState<ReportCategory>('INVENTORY');
   const [reportType, setReportType] = useState<ReportType>('stock_balance');
   const [viewMode, setViewMode] = useState<ViewMode>('both');
@@ -96,26 +103,28 @@ export const ReportsPage: React.FC = () => {
     try {
       if (reportType === 'stock_balance') {
         const data = await reportsApi.getStockBalance(whFilter);
-        setStockBalance(data);
+        setStockBalance(data.filter((d) => isWarehouseInCategory(d.warehouse_id, d.warehouse_name, userDivision)));
       } else if (reportType === 'stock_valuation') {
         if (!hasFinancialAccess) {
           setReportType('stock_balance');
           return;
         }
         const data = await reportsApi.getStockValuation(whFilter);
-        setStockValuation(data);
+        setStockValuation(data.filter((d) => isWarehouseInCategory(d.warehouse_id, d.warehouse_name, userDivision)));
       } else if (reportType === 'stock_aging') {
         const data = await reportsApi.getStockAging(whFilter);
-        setStockAging(data);
+        setStockAging(data.filter((d) => isWarehouseInCategory(d.warehouse_id, d.warehouse_name, userDivision)));
       } else if (reportType === 'issue_history') {
         const data = await reportsApi.getIssueHistory({ warehouse_id: whFilter, limit: 100 });
-        setIssueHistory(data);
+        setIssueHistory(data.filter((d) => isUnitNumberInCategory(d.unit_number, undefined, undefined, userDivision)));
       } else if (reportType === 'consumption_trend') {
         const data = await reportsApi.getConsumptionTrend(whFilter);
         setConsumptionTrend(data);
       } else if (reportType === 'equipment_consumption') {
         const data = await reportsApi.getEquipmentConsumption();
-        setEquipmentConsumption(data);
+        setEquipmentConsumption(
+          data.filter((d) => isUnitNumberInCategory(d.equipment_number, d.equipment_type, d.model, userDivision))
+        );
       } else if (reportType === 'site_consumption') {
         const data = await reportsApi.bySite();
         setSiteReports(data);
@@ -124,10 +133,14 @@ export const ReportsPage: React.FC = () => {
         setMechanicReports(data);
       } else if (reportType === 'warehouse_performance') {
         const data = await reportsApi.getWarehousePerformance();
-        setWarehousePerformance(data);
+        setWarehousePerformance(data.filter((d) => isWarehouseInCategory(d.warehouse_id, d.warehouse_name, userDivision)));
       } else if (reportType === 'replenishment_efficiency') {
         const data = await reportsApi.getReplenishmentEfficiency(whFilter);
-        setReplenishmentEfficiency(data);
+        setReplenishmentEfficiency(
+          data.filter((d) =>
+            isWarehouseInCategory(d.container_warehouse_id, d.container_warehouse_name, userDivision)
+          )
+        );
       }
     } catch (err) {
       console.error('Gagal mengambil data laporan:', err);
@@ -286,7 +299,7 @@ export const ReportsPage: React.FC = () => {
       const columns = [
         { header: 'No. Unit', key: 'equipment_number' as const },
         { header: 'Tipe & Model', key: 'equipment_type' as const },
-        { header: 'Site Tambang', key: 'site' as const },
+        { header: 'Site', key: 'site' as const },
         { header: 'Hour Meter (HM)', key: 'current_hm' as const },
         { header: 'Total Transaksi', key: 'total_transactions' as const },
         ...(hasFinancialAccess
@@ -305,12 +318,12 @@ export const ReportsPage: React.FC = () => {
       });
     } else if (reportType === 'site_consumption') {
       printOrExportPdf({
-        title: 'LAPORAN KONSUMSI SUKU CADANG PER SITE TAMBANG',
-        subtitle: 'Distribusi pemakaian persediaan per lokasi operasional tambang',
+        title: 'LAPORAN KONSUMSI SUKU CADANG PER SITE',
+        subtitle: 'Distribusi pemakaian persediaan per lokasi operasional',
         generatedBy,
         columns: [
           { header: 'ID Site', key: 'site_id' },
-          { header: 'Nama Site Tambang', key: 'site_name' },
+          { header: 'Nama Site', key: 'site_name' },
           { header: 'Total Transaksi', key: 'total_transactions' },
           { header: 'Total Part Terpakai', key: 'total_parts_consumed' },
         ],
@@ -724,7 +737,7 @@ export const ReportsPage: React.FC = () => {
           title: `Unit ${unitNum}`,
           subtitle: `${data.count} kali transaksi pengeluaran`,
           metric: `${data.qty} PCS`,
-          badge: 'Heavy Fleet',
+          badge: isDumpTruckUnitRaw(unitNum) ? 'Dump Truck (DT)' : 'Heavy Equipment (HE)',
         }));
 
       // Top spare parts issued
@@ -795,14 +808,14 @@ export const ReportsPage: React.FC = () => {
             <div className="lg:col-span-5">
               <LeaderboardCard
                 title="Top 5 Armada Unit Teraktif Konsumsi Part"
-                subtitle="Unit tambang dengan akumulasi pengambilan suku cadang terbanyak"
+                subtitle="Unit dengan akumulasi pengambilan suku cadang terbanyak"
                 items={topUnits}
               />
             </div>
             <div className="lg:col-span-7">
               <HorizontalBarChart
                 title="Top 8 Suku Cadang Paling Sering Dikeluarkan"
-                subtitle="Frekuensi pemakaian komponen suku cadang di workshop & tambang"
+                subtitle="Frekuensi pemakaian komponen suku cadang di workshop & operasional"
                 items={topParts}
               />
             </div>
@@ -939,7 +952,13 @@ export const ReportsPage: React.FC = () => {
             <ReportKpiCard
               title="Total Armada Terpantau"
               value={formatNumber(totalArmada)}
-              subtext="Heavy Equipment & Dump Trucks"
+              subtext={
+                userDivision === 'DT'
+                  ? 'Divisi Dump Truck (DT)'
+                  : userDivision === 'HE'
+                  ? 'Divisi Heavy Equipment (HE)'
+                  : 'Heavy Equipment & Dump Trucks'
+              }
               icon={Truck}
               colorScheme="cyan"
             />
@@ -1018,7 +1037,7 @@ export const ReportsPage: React.FC = () => {
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <ReportKpiCard
-              title="Total Site Tambang Aktif"
+              title="Total Site Aktif"
               value={siteReports.length}
               subtext="Lokasi pit & area operasional"
               icon={MapPin}
@@ -1034,7 +1053,7 @@ export const ReportsPage: React.FC = () => {
             <ReportKpiCard
               title="Total Suku Cadang Terpasang"
               value={`${formatNumber(totalConsumed)} PCS`}
-              subtext="Pemakaian persediaan tambang"
+              subtext="Pemakaian persediaan operasional"
               icon={Boxes}
               colorScheme="violet"
             />
@@ -1044,7 +1063,7 @@ export const ReportsPage: React.FC = () => {
             <div className="lg:col-span-5">
               <DonutChart
                 title="Pangsa Konsumsi per Lokasi Site"
-                subtitle="Proporsi alokasi pemakaian suku cadang antar pit tambang"
+                subtitle="Proporsi alokasi pemakaian suku cadang antar pit / site"
                 items={siteDonut}
                 centerLabel="Total Konsumsi"
                 centerValue={`${formatNumber(totalConsumed)} PCS`}
@@ -1099,7 +1118,7 @@ export const ReportsPage: React.FC = () => {
             <ReportKpiCard
               title="Total Mekanik Terlibat"
               value={mechanicReports.length}
-              subtext="Teknisi pemeliharaan armada tambang"
+              subtext="Teknisi pemeliharaan armada"
               icon={Wrench}
               colorScheme="cyan"
             />
@@ -1347,7 +1366,7 @@ export const ReportsPage: React.FC = () => {
             <span>Laporan & Analitik Visual WMS</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Pelaporan analitik terintegrasi untuk persediaan, operasional tambang, evaluasi armada, dan kinerja manajemen.
+            Pelaporan analitik terintegrasi untuk persediaan, operasional lapangan, evaluasi armada, dan kinerja manajemen.
           </p>
         </div>
 
@@ -1358,7 +1377,7 @@ export const ReportsPage: React.FC = () => {
             className="px-3.5 py-2 rounded-xl bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/40 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-violet-500/10"
           >
             <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-            <span>Rekomendasi Laporan Tambang</span>
+            <span>Rekomendasi Laporan Logistik</span>
           </button>
           <button
             onClick={loadData}
@@ -1502,7 +1521,7 @@ export const ReportsPage: React.FC = () => {
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Konsumsi per Site Tambang
+                Konsumsi per Site
               </button>
               <button
                 onClick={() => setReportType('mechanic_consumption')}
@@ -1836,7 +1855,7 @@ export const ReportsPage: React.FC = () => {
                       <tr className="border-b border-slate-800 text-slate-400">
                         <th className="pb-3 font-semibold">No. Unit</th>
                         <th className="pb-3 font-semibold">Tipe & Model</th>
-                        <th className="pb-3 font-semibold">Site Tambang</th>
+                        <th className="pb-3 font-semibold">Site</th>
                         <th className="pb-3 font-semibold text-right">Hour Meter (HM)</th>
                         <th className="pb-3 font-semibold text-center">Total Transaksi</th>
                         {hasFinancialAccess && <th className="pb-3 font-semibold text-right">Total Biaya Suku Cadang</th>}
@@ -1874,7 +1893,7 @@ export const ReportsPage: React.FC = () => {
                     <thead>
                       <tr className="border-b border-slate-800 text-slate-400">
                         <th className="pb-3 font-semibold">ID Site</th>
-                        <th className="pb-3 font-semibold">Nama Site Tambang</th>
+                        <th className="pb-3 font-semibold">Nama Site</th>
                         <th className="pb-3 font-semibold text-center">Total Transaksi Pengeluaran</th>
                         <th className="pb-3 font-semibold text-right">Total Part Terpakai</th>
                       </tr>

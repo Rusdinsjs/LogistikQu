@@ -17,10 +17,13 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -28,7 +31,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "http://10.0.2.2:8090/"
+    private const val BASE_URL = "https://logistik.sjsgroup.online/"
 
     @Provides
     @Singleton
@@ -36,7 +39,27 @@ object NetworkModule {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
+
+        // Resilient DNS: fallback to known Cloudflare Anycast IPs if carrier DNS fails resolution
+        val resilientDns = object : Dns {
+            override fun lookup(hostname: String): List<InetAddress> {
+                return try {
+                    Dns.SYSTEM.lookup(hostname)
+                } catch (e: UnknownHostException) {
+                    if (hostname.equals("logistik.sjsgroup.online", ignoreCase = true)) {
+                        listOf(
+                            InetAddress.getByName("104.21.11.250"),
+                            InetAddress.getByName("172.67.150.207")
+                        )
+                    } else {
+                        throw e
+                    }
+                }
+            }
+        }
+
         return OkHttpClient.Builder()
+            .dns(resilientDns)
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -119,4 +142,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSyncRepository(impl: SyncRepositoryImpl): SyncRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReplenishmentRepository(impl: ReplenishmentRepositoryImpl): ReplenishmentRepository
 }

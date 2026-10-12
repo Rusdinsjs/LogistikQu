@@ -68,7 +68,7 @@ class IssuePartUseCase @Inject constructor(
     suspend operator fun invoke(issue: IssueTransaction): Result<String> {
         // Traceability Validation BR-001 s/d BR-004
         if (issue.unitNumber.isBlank()) {
-            return Result.failure(IllegalArgumentException("Nomor unit alat tambang wajib diisi / discan"))
+            return Result.failure(IllegalArgumentException("Nomor unit alat wajib diisi / discan"))
         }
         if (issue.currentHmKm <= 0.0) {
             return Result.failure(IllegalArgumentException("Hour Meter (HM) / KM unit wajib valid"))
@@ -124,3 +124,53 @@ class SyncQueueUseCase @Inject constructor(
     suspend fun resolveConflict(conflictId: String, resolution: String, notes: String? = null): Result<Unit> =
         syncRepository.resolveConflict(conflictId, resolution, notes)
 }
+
+class GetReplenishmentRecommendationsUseCase @Inject constructor(
+    private val replenishmentRepository: ReplenishmentRepository
+) {
+    suspend operator fun invoke(warehouseId: String): Result<List<ReplenishmentRecommendation>> {
+        return replenishmentRepository.getRecommendations(warehouseId)
+    }
+}
+
+class SubmitReplenishmentRequestUseCase @Inject constructor(
+    private val replenishmentRepository: ReplenishmentRepository
+) {
+    suspend operator fun invoke(
+        containerWarehouseId: String,
+        items: List<ReplenishmentDraftItem>,
+        notes: String?
+    ): Result<String> {
+        if (items.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Pilih minimal satu suku cadang untuk diajukan"))
+        }
+        if (items.any { it.requestedQty <= 0 }) {
+            return Result.failure(IllegalArgumentException("Kuantitas pengajuan harus lebih besar dari 0"))
+        }
+        return replenishmentRepository.submitReplenishmentRequest(containerWarehouseId, items, notes)
+    }
+}
+
+class GetWarehouseBinsUseCase @Inject constructor(
+    private val replenishmentRepository: ReplenishmentRepository
+) {
+    suspend operator fun invoke(warehouseId: String): Result<List<WarehouseBin>> {
+        return replenishmentRepository.getWarehouseBins(warehouseId)
+    }
+}
+
+class RelocateStockBinUseCase @Inject constructor(
+    private val replenishmentRepository: ReplenishmentRepository
+) {
+    suspend operator fun invoke(
+        warehouseId: String,
+        sparePartId: String,
+        targetBinCode: String
+    ): Result<Unit> {
+        if (targetBinCode.isBlank()) {
+            return Result.failure(IllegalArgumentException("Kode bin / rak tidak boleh kosong"))
+        }
+        return replenishmentRepository.relocateStockBin(warehouseId, sparePartId, targetBinCode.trim())
+    }
+}
+

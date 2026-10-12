@@ -14,6 +14,8 @@ val Slate950 = Color(0xFF020617)
 val Slate900 = Color(0xFF0F172A)
 val Slate800 = Color(0xFF1E293B)
 val Slate700 = Color(0xFF334155)
+val Slate600 = Color(0xFF475569)
+val Slate500 = Color(0xFF64748B)
 val Slate400 = Color(0xFF94A3B8)
 val Slate300 = Color(0xFFCBD5E1)
 val Slate200 = Color(0xFFE2E8F0)
@@ -21,10 +23,12 @@ val White = Color(0xFFFFFFFF)
 
 // Operational Accents
 val IndustrialEmerald = Color(0xFF10B981) // Normal / Pass / Inbound
+val IndustrialGreen = IndustrialEmerald
 val IndustrialAmber = Color(0xFFF59E0B)   // Warning / Moderate / In-Transit
 val IndustrialRose = Color(0xFFEF4444)    // Critical / Breakdown / Defect
 val IndustrialCyan = Color(0xFF06B6D4)    // Barcode / Scanner Active
 val IndustrialBlue = Color(0xFF3B82F6)    // Equipment / WO
+val IndustrialPurple = Color(0xFF8B5CF6)  // Mechanic / Permohonan Stok
 
 val DarkColorScheme = darkColorScheme(
     primary = IndustrialEmerald,

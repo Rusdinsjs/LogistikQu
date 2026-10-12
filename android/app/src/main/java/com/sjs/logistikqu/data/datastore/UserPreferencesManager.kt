@@ -23,6 +23,7 @@ class UserPreferencesManager @Inject constructor(
         val USERNAME = stringPreferencesKey("username")
         val FULL_NAME = stringPreferencesKey("full_name")
         val ROLE = stringPreferencesKey("role")
+        val PERMISSIONS = stringPreferencesKey("permissions")
         val WAREHOUSE_ID = stringPreferencesKey("warehouse_id")
         val DEVICE_ID = stringPreferencesKey("device_id")
         val APP_VERSION = stringPreferencesKey("app_version")
@@ -38,13 +39,16 @@ class UserPreferencesManager @Inject constructor(
     val usernameFlow: Flow<String?> = context.dataStore.data.map { prefs -> prefs[Keys.USERNAME] }
     val fullNameFlow: Flow<String?> = context.dataStore.data.map { prefs -> prefs[Keys.FULL_NAME] }
     val roleFlow: Flow<String?> = context.dataStore.data.map { prefs -> prefs[Keys.ROLE] }
+    val permissionsFlow: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.PERMISSIONS]?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+    }
     val warehouseIdFlow: Flow<String> = context.dataStore.data.map { prefs -> prefs[Keys.WAREHOUSE_ID] ?: "WH-CONT-HE" }
     val deviceIdFlow: Flow<String> = context.dataStore.data.map { prefs -> prefs[Keys.DEVICE_ID] ?: "ANDROID-WH-001" }
     val appVersionFlow: Flow<String> = context.dataStore.data.map { prefs -> prefs[Keys.APP_VERSION] ?: "2.0.0" }
     val isBiometricEnabledFlow: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[Keys.BIOMETRIC_ENABLED] ?: false }
     val lastSyncTimeFlow: Flow<Long> = context.dataStore.data.map { prefs -> prefs[Keys.LAST_SYNC_TIME] ?: 0L }
     val isDeviceBoundFlow: Flow<Boolean> = context.dataStore.data.map { prefs -> prefs[Keys.IS_DEVICE_BOUND] ?: true }
-    val serverUrlFlow: Flow<String> = context.dataStore.data.map { prefs -> prefs[Keys.SERVER_URL] ?: "http://10.0.2.2:8090/" }
+    val serverUrlFlow: Flow<String> = context.dataStore.data.map { prefs -> prefs[Keys.SERVER_URL] ?: "https://logistik.sjsgroup.online/" }
 
     suspend fun setServerUrl(url: String) {
         val sanitized = if (!url.endsWith("/")) "$url/" else url
@@ -60,7 +64,8 @@ class UserPreferencesManager @Inject constructor(
         username: String,
         fullName: String,
         role: String,
-        warehouseId: String?
+        warehouseId: String?,
+        permissions: List<String> = emptyList()
     ) {
         context.dataStore.edit { prefs ->
             prefs[Keys.AUTH_TOKEN] = token
@@ -69,6 +74,7 @@ class UserPreferencesManager @Inject constructor(
             prefs[Keys.USERNAME] = username
             prefs[Keys.FULL_NAME] = fullName
             prefs[Keys.ROLE] = role
+            prefs[Keys.PERMISSIONS] = permissions.joinToString(",")
             if (warehouseId != null) {
                 prefs[Keys.WAREHOUSE_ID] = warehouseId
             }
@@ -114,6 +120,7 @@ class UserPreferencesManager @Inject constructor(
             prefs.remove(Keys.USERNAME)
             prefs.remove(Keys.FULL_NAME)
             prefs.remove(Keys.ROLE)
+            prefs.remove(Keys.PERMISSIONS)
         }
     }
 }

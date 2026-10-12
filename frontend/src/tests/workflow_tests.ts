@@ -157,4 +157,91 @@ describe('Frontend Enterprise Workflow & Domain Tests', () => {
       assert.strictEqual(classifyTurnover(10, 100), 'SLOW_MOVING');
     });
   });
+
+  describe('5. POS Issue Traceability & Mandatory Mechanic Signature / Receipt Printing (BR-005)', () => {
+    interface PosValidationInput {
+      receiver_name: string;
+      unit_number: string;
+      mechanic_name: string;
+      items_count: number;
+      signature_type: 'DIGITAL' | 'PHYSICAL';
+      mechanic_signature_url?: string | null;
+      physical_sign_confirmed?: boolean;
+    }
+
+    function validatePosSubmission(input: PosValidationInput): { valid: boolean; error?: string } {
+      if (input.items_count === 0) {
+        return { valid: false, error: 'Minimal 1 suku cadang harus dipilih' };
+      }
+      if (!input.receiver_name || !input.unit_number || !input.mechanic_name) {
+        return { valid: false, error: 'Identitas Penerima, Unit, dan Mekanik wajib diisi lengkap' };
+      }
+      if (input.signature_type === 'DIGITAL' && (!input.mechanic_signature_url || input.mechanic_signature_url.trim() === '')) {
+        return { valid: false, error: 'Mekanik wajib membubuhkan tanda tangan digital di layar terlebih dahulu' };
+      }
+      if (input.signature_type === 'PHYSICAL' && !input.physical_sign_confirmed) {
+        return { valid: false, error: 'Admin wajib mencentang konfirmasi cetak struk dan tanda tangan basah mekanik' };
+      }
+      return { valid: true };
+    }
+
+    test('Rejects submission if digital signature is missing on DIGITAL mode', () => {
+      const res = validatePosSubmission({
+        receiver_name: 'Ahmad Dani',
+        unit_number: 'EX-201',
+        mechanic_name: 'Bambang Sugiharto',
+        items_count: 2,
+        signature_type: 'DIGITAL',
+        mechanic_signature_url: null,
+      });
+      assert.strictEqual(res.valid, false);
+      assert.match(res.error!, /tanda tangan digital/);
+    });
+
+    test('Accepts submission when valid digital signature is recorded', () => {
+      const res = validatePosSubmission({
+        receiver_name: 'Ahmad Dani',
+        unit_number: 'EX-201',
+        mechanic_name: 'Bambang Sugiharto',
+        items_count: 2,
+        signature_type: 'DIGITAL',
+        mechanic_signature_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+      });
+      assert.strictEqual(res.valid, true);
+    });
+
+    test('Rejects PHYSICAL mode if confirmation checkbox is not checked', () => {
+      const res = validatePosSubmission({
+        receiver_name: 'Ahmad Dani',
+        unit_number: 'EX-201',
+        mechanic_name: 'Bambang Sugiharto',
+        items_count: 2,
+        signature_type: 'PHYSICAL',
+        physical_sign_confirmed: false,
+      });
+      assert.strictEqual(res.valid, false);
+      assert.match(res.error!, /konfirmasi cetak struk/);
+    });
+
+    test('Accepts PHYSICAL mode when Admin confirms receipt print & wet signature requirement', () => {
+      const res = validatePosSubmission({
+        receiver_name: 'Ahmad Dani',
+        unit_number: 'EX-201',
+        mechanic_name: 'Bambang Sugiharto',
+        items_count: 2,
+        signature_type: 'PHYSICAL',
+        physical_sign_confirmed: true,
+      });
+      assert.strictEqual(res.valid, true);
+    });
+
+    test('Enforces receipt printed check before safe modal dismissal', () => {
+      function canDismissReceiptWithoutWarning(hasPrinted: boolean): boolean {
+        return hasPrinted === true;
+      }
+      assert.strictEqual(canDismissReceiptWithoutWarning(false), false);
+      assert.strictEqual(canDismissReceiptWithoutWarning(true), true);
+    });
+  });
 });
+

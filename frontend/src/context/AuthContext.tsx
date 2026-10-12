@@ -51,16 +51,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (username: string, password: string = 'password123') => {
-    setLoading(true);
-    try {
-      const data = await authApi.login(username, password);
-      localStorage.setItem('logisticqu_token', data.token);
-      setUser(data.user);
-      if (data.user.warehouses.length > 0) {
-        setActiveWarehouse(data.user.warehouses[0].id);
-      }
-    } finally {
-      setLoading(false);
+    const data = await authApi.login(username, password);
+    localStorage.setItem('logisticqu_token', data.token);
+    setUser(data.user);
+    if (data.user.warehouses.length > 0) {
+      setActiveWarehouse(data.user.warehouses[0].id);
     }
   };
 

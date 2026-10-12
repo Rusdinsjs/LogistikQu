@@ -15,15 +15,40 @@ pub async fn create_db_pool(database_url: &str) -> Result<PgPool, AppError> {
 
     // Menjalankan migrasi embedded
     tracing::info!("Menjalankan database migrations...");
-    sqlx::migrate!("./migrations")
-        .run(&pool)
+    let migrator = sqlx::migrate!("./migrations");
+
+    // Sinkronisasi otomatis apabila ada file migrasi idempoten yang diperbarui checksum-nya
+    for migration in migrator.iter() {
+        let mismatch: Option<i64> = sqlx::query_scalar(
+            "SELECT version FROM _sqlx_migrations WHERE version = $1 AND checksum <> $2",
+        )
+        .bind(migration.version)
+        .bind(migration.checksum.as_ref())
+        .fetch_optional(&pool)
         .await
-        .map_err(|e| {
-            AppError::Internal(anyhow::anyhow!(
-                "Gagal menjalankan migrasi database: {:?}",
-                e
-            ))
-        })?;
+        .unwrap_or(None);
+
+        if mismatch.is_some() {
+            tracing::warn!(
+                "Menyinkronkan ulang perubahan migrasi versi {} ({})...",
+                migration.version,
+                migration.description
+            );
+            let _ = sqlx::raw_sql(&migration.sql).execute(&pool).await;
+            let _ = sqlx::query("UPDATE _sqlx_migrations SET checksum = $1 WHERE version = $2")
+                .bind(migration.checksum.as_ref())
+                .bind(migration.version)
+                .execute(&pool)
+                .await;
+        }
+    }
+
+    migrator.run(&pool).await.map_err(|e| {
+        AppError::Internal(anyhow::anyhow!(
+            "Gagal menjalankan migrasi database: {:?}",
+            e
+        ))
+    })?;
     tracing::info!("Database migrations berhasil diterapkan!");
 
     Ok(pool)

@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { returnsApi, masterApi } from '../api';
 import type { UsedPartReturn, WarehouseInfo } from '../types';
 import {
+  getUserFleetCategory,
+  isUnitNumberInCategory,
+  isWarehouseInCategory,
+} from '../utils/fleetCategory';
+import {
   RotateCcw,
   CheckCircle,
   Clock,
@@ -26,6 +31,7 @@ import {
 
 export const UsedPartReturnsPage: React.FC = () => {
   const { user } = useAuth();
+  const userDivision = getUserFleetCategory(user);
 
   const canReceiveReturn =
     user?.role_id === 'SUPER_ADMIN' ||
@@ -68,7 +74,9 @@ export const UsedPartReturnsPage: React.FC = () => {
 
   // Transfer Main Modal
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [mainWarehouseId, setMainWarehouseId] = useState('WH-MAIN-CENTRAL');
+  const [mainWarehouseId, setMainWarehouseId] = useState(
+    userDivision === 'DT' ? 'WH-MAIN-DT' : 'WH-MAIN-HE'
+  );
   const [transferNotes, setTransferNotes] = useState('');
 
   // Complete Return Modal
@@ -86,7 +94,12 @@ export const UsedPartReturnsPage: React.FC = () => {
         warehouse_id: filterWarehouse || undefined,
         search: search || undefined,
       });
-      setReturns(data);
+      const scoped = data.filter(
+        (r) =>
+          isWarehouseInCategory(r.warehouse_id, undefined, userDivision) &&
+          isUnitNumberInCategory(r.unit_number, undefined, undefined, userDivision)
+      );
+      setReturns(scoped);
     } catch (err) {
       console.error(err);
     } finally {
@@ -98,17 +111,20 @@ export const UsedPartReturnsPage: React.FC = () => {
     const fetchWarehouses = async () => {
       try {
         const whs = await masterApi.getWarehouses();
-        setWarehouseList(whs);
+        const scopedWhs = whs.filter((w) =>
+          isWarehouseInCategory(w.id, w.category, userDivision)
+        );
+        setWarehouseList(scopedWhs);
       } catch (err) {
         console.error(err);
       }
     };
     fetchWarehouses();
-  }, []);
+  }, [userDivision]);
 
   useEffect(() => {
     loadReturns();
-  }, [filterWarehouse]);
+  }, [filterWarehouse, userDivision]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,8 +231,24 @@ export const UsedPartReturnsPage: React.FC = () => {
     }
   };
 
+  const isMechanic = user?.role_id === 'MECHANIC';
+
   // Rekapitulasi per Penanggung Jawab (PJ)
   const holderSummary = useMemo(() => {
+    if (isMechanic) {
+      // Pada Menu Tanggungan Core Retur, hanya memperlihatkan list PJ atas nama User saja
+      const userName = user?.full_name || user?.username || 'Mekanik Penanggung Jawab';
+      const userItems = returns.filter((r) => r.status === 'PENDING_RETURN');
+      return [
+        {
+          name: userName,
+          type: 'MECHANIC',
+          count: userItems.length,
+          items: userItems,
+        },
+      ];
+    }
+
     const map = new Map<
       string,
       {
@@ -241,7 +273,7 @@ export const UsedPartReturnsPage: React.FC = () => {
     });
 
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [returns]);
+  }, [returns, isMechanic, user]);
 
   // Counts by Holder Type
   const countByType = useMemo(() => {
@@ -257,6 +289,15 @@ export const UsedPartReturnsPage: React.FC = () => {
   // Filter returns based on PJ filters
   const filteredReturns = useMemo(() => {
     return returns.filter((r) => {
+      if (isMechanic) {
+        if (selectedHolderType === 'MECHANIC') {
+          return r.status === 'PENDING_RETURN';
+        }
+        if (selectedHolderType === 'CONTAINER_ADMIN') {
+          return r.status !== 'PENDING_RETURN';
+        }
+        return true;
+      }
       if (selectedHolderType !== 'ALL' && r.current_holder_type !== selectedHolderType) {
         return false;
       }
@@ -265,7 +306,7 @@ export const UsedPartReturnsPage: React.FC = () => {
       }
       return true;
     });
-  }, [returns, selectedHolderType, selectedHolderName]);
+  }, [returns, selectedHolderType, selectedHolderName, isMechanic]);
 
   // Group filtered returns for the 4 Kanban columns
   const pendingMechanic = filteredReturns.filter((r) => r.status === 'PENDING_RETURN');
@@ -282,21 +323,29 @@ export const UsedPartReturnsPage: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <RotateCcw className="w-5 h-5 text-amber-400" />
-            Pelacakan Retur Spare Part Bekas (Core Return Tracking)
+            {isMechanic
+              ? 'Tanggungan Core Retur Saya (BR-004)'
+              : 'Pelacakan Retur Spare Part Bekas (Core Return Tracking)'}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Monitoring fisik part rusak yang wajib dikembalikan saat servis, dengan penanggung jawab real-time berjenjang (Mekanik &rarr; Admin Kontainer &rarr; Admin Gudang Utama).
+            {isMechanic
+              ? `Monitoring fisik komponen bekas yang menjadi tanggungan Anda (${user?.full_name || user?.username}). Wajib diserahkan ke loket kontainer maksimal 1x24 jam.`
+              : 'Monitoring fisik part rusak yang wajib dikembalikan saat servis, dengan penanggung jawab real-time berjenjang (Mekanik → Admin Kontainer → Admin Gudang Utama).'}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start md:self-auto">
           <button
             type="button"
             onClick={() => setShowHolderSummaryModal(true)}
-            className="p-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-cyan-300 text-xs flex items-center gap-1.5 transition-colors border border-cyan-500/30 shadow-sm"
+            className="p-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-cyan-300 text-xs flex items-center gap-1.5 transition-colors border border-cyan-500/30 shadow-sm cursor-pointer"
             title="Lihat Daftar & Rekap Part per Penanggung Jawab"
           >
             <Users className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Rekapitulasi per PJ ({holderSummary.length})</span>
+            <span>
+              {isMechanic
+                ? `Tanggungan PJ Saya (${pendingMechanic.length} Part)`
+                : `Rekapitulasi per PJ (${holderSummary.length})`}
+            </span>
           </button>
           <button
             type="button"
@@ -309,6 +358,37 @@ export const UsedPartReturnsPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Banner Kontrol Khusus Mekanik */}
+      {user?.role_id === 'MECHANIC' && (
+        <div className="glass-panel rounded-2xl p-4 border border-amber-500/30 bg-amber-500/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+              <RotateCcw className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Kontrol Tanggungan Part Bekas Anda (Aturan BR-004)
+              </h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Setiap komponen bekas (Filter, Alternator, Turbo, Starter) wajib diserahkan fisik ke Admin Kontainer maksimal 1x24 jam setelah penggantian.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="px-3 py-2 rounded-xl bg-slate-900 border border-amber-500/40 text-center flex-1 md:flex-initial">
+              <div className="text-[10px] text-amber-400 uppercase font-semibold">Belum Diserahkan</div>
+              <div className="text-base font-bold text-amber-300 font-mono">{pendingMechanic.length} Part</div>
+            </div>
+            <div className="px-3 py-2 rounded-xl bg-slate-900 border border-emerald-500/40 text-center flex-1 md:flex-initial">
+              <div className="text-[10px] text-emerald-400 uppercase font-semibold">Sudah Diserahkan</div>
+              <div className="text-base font-bold text-emerald-300 font-mono">
+                {atContainer.length + atMain.length + completed.length} Part
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="glass-panel rounded-2xl p-4 border border-slate-800 space-y-3">
@@ -328,32 +408,39 @@ export const UsedPartReturnsPage: React.FC = () => {
           {/* Filter Dropdown Penanggung Jawab Spesifik */}
           <div className="flex items-center gap-2 w-full lg:w-auto">
             <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
-            <select
-              value={selectedHolderName}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedHolderName(val);
-                if (val) {
-                  const match = holderSummary.find((h) => h.name === val);
-                  if (match) setSelectedHolderType(match.type);
-                }
-              }}
-              className="w-full lg:w-60 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
-            >
-              <option value="">Semua Personil PJ ({holderSummary.length} orang)</option>
-              {holderSummary.map((h) => (
-                <option key={h.name} value={h.name}>
-                  {h.type === 'MECHANIC'
-                    ? '👨‍🔧 [Mekanik] '
-                    : h.type === 'CONTAINER_ADMIN'
-                    ? '📦 [Kontainer] '
-                    : h.type === 'MAIN_ADMIN'
-                    ? '🏢 [Utama] '
-                    : '✅ [Selesai] '}
-                  {h.name} ({h.count} part)
-                </option>
-              ))}
-            </select>
+            {isMechanic ? (
+              <div className="w-full lg:w-64 px-2.5 py-2 text-xs bg-slate-900 border border-amber-500/40 rounded-lg text-amber-300 flex items-center gap-1.5 shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-slate-400">PJ:</span>
+                <span className="font-semibold truncate">👨‍🔧 {user?.full_name || user?.username} (Saya)</span>
+              </div>
+            ) : (
+              <select
+                value={selectedHolderName}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedHolderName(val);
+                  if (val) {
+                    const match = holderSummary.find((h) => h.name === val);
+                    if (match) setSelectedHolderType(match.type);
+                  }
+                }}
+                className="w-full lg:w-60 px-2.5 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+              >
+                <option value="">Semua Personil PJ ({holderSummary.length} orang)</option>
+                {holderSummary.map((h) => (
+                  <option key={h.name} value={h.name}>
+                    {h.type === 'MECHANIC'
+                      ? '👨‍🔧 [Mekanik] '
+                      : h.type === 'CONTAINER_ADMIN'
+                      ? '📦 [Kontainer] '
+                      : h.type === 'MAIN_ADMIN'
+                      ? '🏢 [Utama] '
+                      : '✅ [Selesai] '}
+                    {h.name} ({h.count} part)
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Filter Dropdown Gudang */}
@@ -375,102 +462,165 @@ export const UsedPartReturnsPage: React.FC = () => {
         </div>
 
         {/* Quick Filter Pill Chips by Penanggung Jawab (PJ) */}
-        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-400 mr-1 flex items-center gap-1.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Kategori PJ:</span>
-          </span>
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedHolderType('ALL');
-              setSelectedHolderName('');
-            }}
-            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedHolderType === 'ALL' && !selectedHolderName
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>Semua PJ</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 font-mono text-cyan-300">
-              {countByType.ALL}
+        {isMechanic ? (
+          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-400 mr-1 flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Status Tanggungan:</span>
             </span>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedHolderType('MECHANIC');
-              setSelectedHolderName('');
-            }}
-            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedHolderType === 'MECHANIC' && !selectedHolderName
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>👨‍🔧 Di Mekanik</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 font-mono text-amber-300">
-              {countByType.MECHANIC}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('ALL');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'ALL'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>Semua Riwayat</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 font-mono text-cyan-300">
+                {returns.length}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedHolderType('CONTAINER_ADMIN');
-              setSelectedHolderName('');
-            }}
-            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedHolderType === 'CONTAINER_ADMIN' && !selectedHolderName
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>📦 Di Admin Kontainer</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/20 font-mono text-cyan-300">
-              {countByType.CONTAINER_ADMIN}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('MECHANIC');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'MECHANIC'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>⚠️ Belum Diserahkan (Tanggungan Aktif)</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 font-mono text-amber-300">
+                {pendingMechanic.length}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedHolderType('MAIN_ADMIN');
-              setSelectedHolderName('');
-            }}
-            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedHolderType === 'MAIN_ADMIN' && !selectedHolderName
-                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>🏢 Di Gudang Utama</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/20 font-mono text-blue-300">
-              {countByType.MAIN_ADMIN}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('CONTAINER_ADMIN');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'CONTAINER_ADMIN'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>✓ Sudah Diserahkan ke Kontainer</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 font-mono text-emerald-300">
+                {atContainer.length + atMain.length + completed.length}
+              </span>
+            </button>
+          </div>
+        ) : (
+          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-400 mr-1 flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Kategori PJ:</span>
             </span>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedHolderType('COMPLETED');
-              setSelectedHolderName('');
-            }}
-            className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              selectedHolderType === 'COMPLETED' && !selectedHolderName
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
-          >
-            <span>✅ Selesai (Scrap)</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 font-mono text-emerald-300">
-              {countByType.COMPLETED}
-            </span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('ALL');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'ALL' && !selectedHolderName
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>Semua PJ</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 font-mono text-cyan-300">
+                {countByType.ALL}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('MECHANIC');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'MECHANIC' && !selectedHolderName
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>👨‍🔧 Di Mekanik</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 font-mono text-amber-300">
+                {countByType.MECHANIC}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('CONTAINER_ADMIN');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'CONTAINER_ADMIN' && !selectedHolderName
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>📦 Di Admin Kontainer</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-cyan-500/20 font-mono text-cyan-300">
+                {countByType.CONTAINER_ADMIN}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('MAIN_ADMIN');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'MAIN_ADMIN' && !selectedHolderName
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>🏢 Di Gudang Utama</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/20 font-mono text-blue-300">
+                {countByType.MAIN_ADMIN}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHolderType('COMPLETED');
+                setSelectedHolderName('');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                selectedHolderType === 'COMPLETED' && !selectedHolderName
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>✅ Selesai (Scrap)</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 font-mono text-emerald-300">
+                {countByType.COMPLETED}
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Active Filter Notification Bar */}
         {(selectedHolderType !== 'ALL' || selectedHolderName) && (
@@ -478,21 +628,37 @@ export const UsedPartReturnsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Filter className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>
-                Memfilter suku cadang pada PJ:
-                <strong className="text-white ml-1 font-semibold">
-                  {selectedHolderName
-                    ? selectedHolderName
-                    : selectedHolderType === 'MECHANIC'
-                    ? 'Mekanik Lapangan'
-                    : selectedHolderType === 'CONTAINER_ADMIN'
-                    ? 'Admin Gudang Kontainer'
-                    : selectedHolderType === 'MAIN_ADMIN'
-                    ? 'Admin Gudang Utama'
-                    : 'Selesai/Disposisi'}
-                </strong>
-                <span className="ml-2 font-mono text-cyan-300 font-bold">
-                  ({filteredReturns.length} part ditemukan)
-                </span>
+                {isMechanic ? (
+                  <>
+                    Memfilter status:
+                    <strong className="text-white ml-1 font-semibold">
+                      {selectedHolderType === 'MECHANIC'
+                        ? 'Belum Diserahkan (Tanggungan Aktif)'
+                        : 'Sudah Diserahkan ke Kontainer'}
+                    </strong>
+                    <span className="ml-2 font-mono text-cyan-300 font-bold">
+                      ({filteredReturns.length} part)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Memfilter suku cadang pada PJ:
+                    <strong className="text-white ml-1 font-semibold">
+                      {selectedHolderName
+                        ? selectedHolderName
+                        : selectedHolderType === 'MECHANIC'
+                        ? 'Mekanik Lapangan'
+                        : selectedHolderType === 'CONTAINER_ADMIN'
+                        ? 'Admin Gudang Kontainer'
+                        : selectedHolderType === 'MAIN_ADMIN'
+                        ? 'Admin Gudang Utama'
+                        : 'Selesai/Disposisi'}
+                    </strong>
+                    <span className="ml-2 font-mono text-cyan-300 font-bold">
+                      ({filteredReturns.length} part ditemukan)
+                    </span>
+                  </>
+                )}
               </span>
             </div>
             <button
@@ -501,7 +667,7 @@ export const UsedPartReturnsPage: React.FC = () => {
                 setSelectedHolderType('ALL');
                 setSelectedHolderName('');
               }}
-              className="text-xs text-amber-400 hover:text-white underline font-semibold flex items-center gap-1"
+              className="text-xs text-amber-400 hover:text-white underline font-semibold flex items-center gap-1 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
               <span>Reset Filter</span>
@@ -590,7 +756,9 @@ export const UsedPartReturnsPage: React.FC = () => {
                   <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
                     <div className="flex items-center gap-1.5 text-amber-200">
                       <User className="w-3 h-3 text-amber-400 shrink-0" />
-                      <span className="font-semibold truncate">P.J: Mekanik {item.current_holder_name}</span>
+                      <span className="font-semibold truncate">
+                        P.J: {isMechanic ? `${user?.full_name || user?.username || item.current_holder_name} (Saya)` : `Mekanik ${item.current_holder_name}`}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Truck className="w-3 h-3 shrink-0" />
@@ -601,6 +769,13 @@ export const UsedPartReturnsPage: React.FC = () => {
                       <span>Gudang: {item.warehouse_name || item.warehouse_id}</span>
                     </div>
                   </div>
+
+                  {user?.role_id === 'MECHANIC' && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
+                      <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span>Tanggungan Anda (Wajib serahkan ke loket kontainer)</span>
+                    </div>
+                  )}
 
                   <div className="pt-1 flex items-center justify-between gap-2">
                     <button
@@ -673,7 +848,11 @@ export const UsedPartReturnsPage: React.FC = () => {
                   <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
                     <div className="flex items-center gap-1.5 text-cyan-200">
                       <User className="w-3 h-3 text-cyan-400 shrink-0" />
-                      <span className="font-semibold truncate">P.J: {item.current_holder_name}</span>
+                      <span className="font-semibold truncate">
+                        {isMechanic
+                          ? `PJ Asal: ${user?.full_name || user?.username || item.mechanic_name} (Diserahkan ke Kontainer)`
+                          : `P.J: ${item.current_holder_name}`}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Clock className="w-3 h-3 shrink-0" />
@@ -695,6 +874,13 @@ export const UsedPartReturnsPage: React.FC = () => {
                     )}
                   </div>
 
+                  {user?.role_id === 'MECHANIC' && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold">
+                      <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span>Sudah Diterima Admin Kontainer ✓</span>
+                    </div>
+                  )}
+
                   <div className="pt-1 flex items-center justify-between gap-2">
                     <button
                       type="button"
@@ -712,6 +898,11 @@ export const UsedPartReturnsPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setSelectedReturn(item);
+                          if (item.warehouse_id?.includes('DT')) {
+                            setMainWarehouseId('WH-MAIN-DT');
+                          } else if (item.warehouse_id?.includes('HE')) {
+                            setMainWarehouseId('WH-MAIN-HE');
+                          }
                           setShowTransferModal(true);
                         }}
                         className="flex-1 py-1.5 px-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-bold text-[11px] border border-blue-500/40 flex items-center justify-center gap-1 transition-colors"
@@ -766,7 +957,11 @@ export const UsedPartReturnsPage: React.FC = () => {
                   <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-300 border border-slate-800">
                     <div className="flex items-center gap-1.5 text-blue-200">
                       <User className="w-3 h-3 text-blue-400 shrink-0" />
-                      <span className="font-semibold truncate">P.J: {item.current_holder_name}</span>
+                      <span className="font-semibold truncate">
+                        {isMechanic
+                          ? `PJ Asal: ${user?.full_name || user?.username || item.mechanic_name} (Di Gudang Utama)`
+                          : `P.J: ${item.current_holder_name}`}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Building2 className="w-3 h-3 shrink-0" />
@@ -845,7 +1040,11 @@ export const UsedPartReturnsPage: React.FC = () => {
                   <div className="bg-slate-950/60 p-2 rounded-lg text-[10px] space-y-1 font-mono text-slate-400 border border-slate-800">
                     <div className="flex items-center gap-1.5 text-emerald-300">
                       <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
-                      <span className="truncate">{item.current_holder_name}</span>
+                      <span className="truncate">
+                        {isMechanic
+                          ? `PJ Asal: ${user?.full_name || user?.username || item.mechanic_name} (Selesai/Scrap)`
+                          : item.current_holder_name}
+                      </span>
                     </div>
                   </div>
 
@@ -877,30 +1076,36 @@ export const UsedPartReturnsPage: React.FC = () => {
               <div className="flex items-center gap-2 text-cyan-400">
                 <Users className="w-5 h-5" />
                 <h3 className="text-sm font-bold text-white">
-                  Rekapitulasi Suku Cadang per Penanggung Jawab ({holderSummary.length} Personil)
+                  {isMechanic
+                    ? `Rekapitulasi Tanggungan Core Retur — ${user?.full_name || user?.username}`
+                    : `Rekapitulasi Suku Cadang per Penanggung Jawab (${holderSummary.length} Personil)`}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowHolderSummaryModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <p className="text-xs text-slate-400">
-              Daftar penanggung jawab fisik suku cadang bekas saat ini. Klik tombol <strong>Filter Part PJ Ini</strong> untuk langsung melihat item terkait pada Kanban Board.
+              {isMechanic
+                ? 'Daftar suku cadang bekas yang saat ini berstatus tanggungan aktif atas nama Anda dan wajib diserahkan fisik ke loket Admin Kontainer.'
+                : 'Daftar penanggung jawab fisik suku cadang bekas saat ini. Klik tombol Filter Part PJ Ini untuk langsung melihat item terkait pada Kanban Board.'}
             </p>
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {holderSummary.length === 0 ? (
+              {holderSummary.length === 0 || (isMechanic && pendingMechanic.length === 0) ? (
                 <div className="text-center py-12 text-slate-500 text-xs">
-                  Belum ada data penanggung jawab fisik.
+                  {isMechanic
+                    ? 'Tidak ada part bekas yang menjadi tanggungan Anda saat ini. Semua part telah diserahkan ke kontainer.'
+                    : 'Belum ada data penanggung jawab fisik.'}
                 </div>
               ) : (
                 holderSummary.map((h) => {
-                  const isMechanic = h.type === 'MECHANIC';
+                  const isMechanicType = h.type === 'MECHANIC';
                   const isContainer = h.type === 'CONTAINER_ADMIN';
                   const isMain = h.type === 'MAIN_ADMIN';
 
@@ -908,7 +1113,9 @@ export const UsedPartReturnsPage: React.FC = () => {
                     <div
                       key={h.name}
                       className={`p-3.5 rounded-xl border transition-all ${
-                        selectedHolderName === h.name
+                        isMechanic
+                          ? 'bg-amber-500/10 border-amber-500/50'
+                          : selectedHolderName === h.name
                           ? 'bg-amber-500/10 border-amber-500/60'
                           : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
                       }`}
@@ -920,6 +1127,8 @@ export const UsedPartReturnsPage: React.FC = () => {
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                                 isMechanic
                                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : isMechanicType
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                                   : isContainer
                                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                                   : isMain
@@ -928,6 +1137,8 @@ export const UsedPartReturnsPage: React.FC = () => {
                               }`}
                             >
                               {isMechanic
+                                ? '👨‍🔧 PENANGGUNG JAWAB (USER)'
+                                : isMechanicType
                                 ? '👨‍🔧 MEKANIK'
                                 : isContainer
                                 ? '📦 ADMIN KONTAINER'
@@ -937,24 +1148,29 @@ export const UsedPartReturnsPage: React.FC = () => {
                             </span>
                             <span className="font-bold text-white text-xs">{h.name}</span>
                           </div>
-                          <p className="text-[11px] text-slate-400">
-                            Menanggung <span className="font-mono text-cyan-300 font-bold">{h.count} unit part</span>
+                          <p className="text-[11px] text-slate-300">
+                            {isMechanic
+                              ? <>Menanggung <span className="font-mono text-amber-300 font-bold">{h.count} unit part fisik</span> yang belum diserahkan ke loket.</>
+                              : <>Menanggung <span className="font-mono text-cyan-300 font-bold">{h.count} unit part</span></>
+                            }
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedHolderName(h.name);
-                              setSelectedHolderType(h.type);
-                              setShowHolderSummaryModal(false);
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs border border-cyan-500/40 transition-colors"
-                          >
-                            Filter Part PJ Ini &rarr;
-                          </button>
-                        </div>
+                        {!isMechanic && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedHolderName(h.name);
+                                setSelectedHolderType(h.type);
+                                setShowHolderSummaryModal(false);
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-xs border border-cyan-500/40 transition-colors"
+                            >
+                              Filter Part PJ Ini &rarr;
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Item details list preview */}
@@ -962,7 +1178,11 @@ export const UsedPartReturnsPage: React.FC = () => {
                         {h.items.map((it) => (
                           <span
                             key={it.id}
-                            className="text-[10px] px-2 py-0.5 rounded bg-slate-950/80 text-slate-300 border border-slate-800 font-mono"
+                            className={`text-[10px] px-2 py-0.5 rounded font-mono ${
+                              isMechanic
+                                ? 'bg-slate-950/80 text-amber-300 border border-amber-500/30'
+                                : 'bg-slate-950/80 text-slate-300 border border-slate-800'
+                            }`}
                           >
                             {it.return_number} ({it.spare_part_id} - Unit {it.unit_number})
                           </span>
@@ -978,7 +1198,7 @@ export const UsedPartReturnsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowHolderSummaryModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
               >
                 Tutup
               </button>
@@ -1138,7 +1358,9 @@ export const UsedPartReturnsPage: React.FC = () => {
                     </option>
                   ))}
                   {mainWarehouses.length === 0 && (
-                    <option value="WH-MAIN-CENTRAL">Gudang Utama Central (WH-MAIN-CENTRAL)</option>
+                    <option value={userDivision === 'DT' ? 'WH-MAIN-DT' : 'WH-MAIN-HE'}>
+                      {userDivision === 'DT' ? 'Gudang Utama Dump Truck (WH-MAIN-DT)' : 'Gudang Utama Alat Berat (WH-MAIN-HE)'}
+                    </option>
                   )}
                 </select>
               </div>

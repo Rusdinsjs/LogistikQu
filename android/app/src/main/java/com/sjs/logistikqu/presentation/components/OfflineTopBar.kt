@@ -13,10 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import com.sjs.logistikqu.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,19 +31,26 @@ fun LogistikQuTopBar(
     onSyncBadgeClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
-    Column(modifier = Modifier.fillMaxWidth().background(Slate900)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .background(Slate900)
+    ) {
         TopAppBar(
+            modifier = Modifier.heightIn(min = 72.dp),
             title = {
-                Column {
+                Column(modifier = Modifier.padding(vertical = 2.dp)) {
                     Text(
                         text = title,
                         fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
+                        fontSize = 15.sp,
                         color = White
                     )
+                    Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = "Device ID: $deviceId",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = Slate400
                     )
                 }
@@ -161,7 +168,7 @@ fun LogistikQuTopBar(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "MODE OFFLINE TAMBANG AKTIF • Transaksi disimpan lokal di Room DB",
+                        text = "MODE OFFLINE AKTIF • Transaksi disimpan lokal di Room DB",
                         color = Slate950,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
@@ -171,3 +178,34 @@ fun LogistikQuTopBar(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+private fun LogistikQuTopBarOnlinePreview() {
+    LogistikQuTheme {
+        LogistikQuTopBar(
+            title = "Pengeluaran Part",
+            isOnline = true,
+            pendingSyncCount = 0,
+            conflictCount = 0,
+            deviceId = "ANDROID-WH-001",
+            onNavigateBack = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun LogistikQuTopBarOfflinePreview() {
+    LogistikQuTheme {
+        LogistikQuTopBar(
+            title = "Pengeluaran Part",
+            isOnline = false,
+            pendingSyncCount = 3,
+            conflictCount = 1,
+            deviceId = "ANDROID-WH-001",
+            onNavigateBack = {}
+        )
+    }
+}
+

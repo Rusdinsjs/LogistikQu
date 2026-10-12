@@ -43,3 +43,31 @@ fun SyncQueueEntity.toDomain(): SyncQueueItem = SyncQueueItem(
     updatedAt = updated_at,
     errorMessage = last_error
 )
+
+fun com.sjs.logistikqu.data.api.models.ReplenishmentRecommendationDto.toDomain(): ReplenishmentRecommendation = ReplenishmentRecommendation(
+    sparePartId = sparePartId,
+    partName = partName,
+    unitOfMeasure = unitOfMeasure,
+    currentStock = currentStock,
+    minStock = minStock,
+    maxStock = maxStock,
+    safetyStock = safetyStock,
+    leadTimeDays = leadTimeDays,
+    avgDailyUsage = avgDailyUsage,
+    recommendedOrderQty = recommendedOrderQty,
+    reorderPoint = reorderPoint,
+    consumptionTrend = consumptionTrend
+)
+
+fun com.sjs.logistikqu.data.api.models.WarehouseBinItemDto.toDomain(): WarehouseBin = WarehouseBin(
+    id = id,
+    warehouseId = warehouseId,
+    binCode = binCode,
+    zone = zone ?: "A",
+    shelfLevel = shelfLevel ?: "1",
+    capacityParts = capacityParts ?: 50,
+    currentItemsCount = currentItemsCount ?: 0L,
+    totalQty = totalQty ?: 0.0,
+    description = description
+)
+

@@ -182,6 +182,15 @@ impl AuthService {
                 avatar_url: user.avatar_url,
                 email: user.email,
                 phone: user.phone,
+                employee_id: sqlx::query_scalar::<_, Option<String>>(
+                    "SELECT employee_id FROM users WHERE id = $1",
+                )
+                .bind(user.id)
+                .fetch_optional(&self.pool)
+                .await
+                .ok()
+                .flatten()
+                .flatten(),
             },
         })
     }
@@ -317,6 +326,15 @@ impl AuthService {
 
         let permissions = self.user_repo.get_effective_permissions(user.id).await?;
 
+        let employee_id: Option<String> =
+            sqlx::query_scalar::<_, Option<String>>("SELECT employee_id FROM users WHERE id = $1")
+                .bind(user.id)
+                .fetch_optional(&self.pool)
+                .await
+                .ok()
+                .flatten()
+                .flatten();
+
         Ok(UserProfile {
             id: user.id,
             username: user.username,
@@ -330,6 +348,7 @@ impl AuthService {
             avatar_url: user.avatar_url,
             email: user.email,
             phone: user.phone,
+            employee_id,
         })
     }
 

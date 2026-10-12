@@ -148,27 +148,27 @@ impl MaintenanceRepository {
                 RETURNING *
             )
             SELECT
-                i.id,
+                i.id as "id!",
                 i.work_order_number,
-                i.equipment_id,
-                i.unit_number,
+                i.equipment_id as "equipment_id!",
+                i.unit_number as "unit_number!",
                 i.component_id,
                 c.name as "component_name?",
                 i.spare_part_id,
                 p.part_name as "part_name?",
                 i.failure_code,
                 i.failure_symptom,
-                i.maintenance_type,
-                i.hm_km,
-                i.parts_qty,
-                i.parts_cost,
-                i.labor_cost,
-                i.total_cost,
-                i.downtime_hours,
+                i.maintenance_type as "maintenance_type!",
+                i.hm_km as "hm_km!",
+                i.parts_qty as "parts_qty!",
+                i.parts_cost as "parts_cost!",
+                i.labor_cost as "labor_cost!",
+                i.total_cost as "total_cost!",
+                i.downtime_hours as "downtime_hours!",
                 i.mechanic_name,
-                i.performed_at,
+                i.performed_at as "performed_at!",
                 i.notes,
-                i.created_at
+                i.created_at as "created_at!"
             FROM inserted i
             LEFT JOIN equipment_components c ON i.component_id = c.id
             LEFT JOIN spare_parts p ON i.spare_part_id = p.id

@@ -57,10 +57,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-              <Warehouse className="h-5 w-5" />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/logo.png"
+              alt="SJS-VIPO Logo"
+              className="h-9 w-9 rounded-lg object-contain border border-cyan-500/30 bg-slate-900 shadow-sm p-0.5"
+            />
             <div>
               <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
                 Logistic<span className="text-cyan-400">Qu</span>

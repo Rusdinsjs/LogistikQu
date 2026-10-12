@@ -34,6 +34,7 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
+    pub employee_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -410,7 +411,16 @@ pub struct CreateIssueRequest {
     pub client_uuid: Option<Uuid>,
     pub evidence_photo_url: Option<String>,
     pub document_url: Option<String>,
+    pub mechanic_signature_url: Option<String>,
+    pub signature_type: Option<String>,
+    pub receipt_printed: Option<bool>,
+    pub signed_receipt_photo_url: Option<String>,
     pub items: Vec<CreateIssueItem>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RecordReceiptPrintedRequest {
+    pub signed_receipt_photo_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
@@ -437,6 +447,11 @@ pub struct IssueTransaction {
     pub notes: Option<String>,
     pub evidence_photo_url: Option<String>,
     pub document_url: Option<String>,
+    pub mechanic_signature_url: Option<String>,
+    pub signature_type: String,
+    pub receipt_printed: bool,
+    pub receipt_printed_at: Option<DateTime<Utc>>,
+    pub signed_receipt_photo_url: Option<String>,
     pub created_by: Uuid,
     pub approved_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
@@ -1113,4 +1128,251 @@ pub struct ReplenishmentEfficiencyReportItem {
     pub total_qty_requested: Decimal,
     pub total_qty_received: Decimal,
     pub fulfillment_accuracy_percent: Decimal,
+}
+
+// ============================================================================
+// Permohonan Stock Mekanik (Mechanic Stock Request)
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
+pub struct MechanicRequest {
+    pub id: Uuid,
+    pub request_number: String,
+    pub request_type: String, // 'REPLACEMENT', 'RETURN'
+    pub warehouse_id: String,
+    pub site_id: Option<String>,
+    pub status: String, // 'SUBMITTED', 'REVISION_REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED', 'CANCELLED'
+    pub unit_number: Option<String>,
+    pub unit_name: Option<String>,
+    pub unit_type: Option<String>,
+    pub ct_number: Option<String>,
+    pub serial_number: Option<String>,
+    pub hm_km: Option<Decimal>,
+    pub work_order_number: Option<String>,
+    pub maintenance_type: Option<String>,
+    pub priority: String,
+    pub mechanic_id: Option<String>,
+    pub mechanic_name: String,
+    pub requester_user_id: Option<Uuid>,
+    pub requester_name: Option<String>,
+    pub input_channel: String, // 'MECHANIC', 'ADMIN_CONTAINER', 'MOBILE'
+    pub damage_category: Option<String>,
+    pub damage_description: Option<String>,
+    pub damage_photo_url: Option<String>,
+    pub old_part_photo_url: Option<String>,
+    pub document_url: Option<String>,
+    pub return_reason: Option<String>,
+    pub reference_issue_number: Option<String>,
+    pub notes: Option<String>,
+    pub revision_notes: Option<String>,
+    pub revision_count: i32,
+    pub approved_by: Option<Uuid>,
+    pub approved_by_name: Option<String>,
+    pub approved_at: Option<DateTime<Utc>>,
+    pub approve_notes: Option<String>,
+    pub rejected_by: Option<Uuid>,
+    pub rejected_by_name: Option<String>,
+    pub rejected_at: Option<DateTime<Utc>>,
+    pub reject_reason: Option<String>,
+    pub fulfilled_by: Option<Uuid>,
+    pub fulfilled_by_name: Option<String>,
+    pub fulfilled_at: Option<DateTime<Utc>>,
+    pub fulfill_notes: Option<String>,
+    pub issue_transaction_id: Option<Uuid>,
+    pub issue_transaction_number: Option<String>,
+    pub client_uuid: Option<Uuid>,
+    pub device_id: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub items_count: Option<i64>,
+    pub total_qty: Option<Decimal>,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
+pub struct MechanicRequestItem {
+    pub id: Uuid,
+    pub request_id: Uuid,
+    pub spare_part_id: String,
+    pub part_name: String,
+    pub unit_of_measure: String,
+    pub requested_qty: Decimal,
+    pub approved_qty: Option<Decimal>,
+    pub fulfilled_qty: Option<Decimal>,
+    pub item_condition: Option<String>,
+    pub notes: Option<String>,
+    pub stock_on_hand: Option<Decimal>,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
+pub struct MechanicRequestHistory {
+    pub id: Uuid,
+    pub request_id: Uuid,
+    pub action: String,
+    pub from_status: Option<String>,
+    pub to_status: String,
+    pub actor_id: Option<Uuid>,
+    pub actor_name: Option<String>,
+    pub actor_role: Option<String>,
+    pub notes: Option<String>,
+    pub changes: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct MechanicRequestSummary {
+    pub total: i64,
+    pub submitted: i64,
+    pub revision_requested: i64,
+    pub approved: i64,
+    pub completed: i64,
+    pub rejected: i64,
+    pub cancelled: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MechanicRequestFilterQuery {
+    pub warehouse_id: Option<String>,
+    pub status: Option<String>,
+    pub request_type: Option<String>,
+    pub search: Option<String>,
+    pub mine: Option<bool>,
+    pub force: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMechanicRequestPayload {
+    pub request_type: String, // 'REPLACEMENT', 'RETURN'
+    pub warehouse_id: String,
+    pub site_id: Option<String>,
+    pub unit_number: Option<String>,
+    pub unit_name: Option<String>,
+    pub unit_type: Option<String>,
+    pub ct_number: Option<String>,
+    pub serial_number: Option<String>,
+    pub hm_km: Option<Decimal>,
+    pub work_order_number: Option<String>,
+    pub maintenance_type: Option<String>,
+    pub priority: Option<String>,
+    pub mechanic_id: Option<String>,
+    pub mechanic_name: Option<String>,
+    pub damage_category: Option<String>,
+    pub damage_description: Option<String>,
+    pub damage_photo_url: Option<String>,
+    pub old_part_photo_url: Option<String>,
+    pub document_url: Option<String>,
+    pub return_reason: Option<String>,
+    pub reference_issue_number: Option<String>,
+    pub notes: Option<String>,
+    pub client_uuid: Option<Uuid>,
+    pub device_id: Option<String>,
+    pub items: Vec<CreateMechanicRequestItemPayload>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CreateMechanicRequestItemPayload {
+    pub spare_part_id: String,
+    pub qty: Decimal,
+    pub item_condition: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMechanicRequestPayload {
+    pub request_type: Option<String>,
+    pub warehouse_id: Option<String>,
+    pub site_id: Option<String>,
+    pub unit_number: Option<String>,
+    pub unit_name: Option<String>,
+    pub unit_type: Option<String>,
+    pub ct_number: Option<String>,
+    pub serial_number: Option<String>,
+    pub hm_km: Option<Decimal>,
+    pub work_order_number: Option<String>,
+    pub maintenance_type: Option<String>,
+    pub priority: Option<String>,
+    pub mechanic_id: Option<String>,
+    pub mechanic_name: Option<String>,
+    pub damage_category: Option<String>,
+    pub damage_description: Option<String>,
+    pub damage_photo_url: Option<String>,
+    pub old_part_photo_url: Option<String>,
+    pub document_url: Option<String>,
+    pub return_reason: Option<String>,
+    pub reference_issue_number: Option<String>,
+    pub notes: Option<String>,
+    pub items: Option<Vec<CreateMechanicRequestItemPayload>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApproveMechanicRequestPayload {
+    pub notes: Option<String>,
+    pub items: Option<Vec<ApproveItemPayload>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ApproveItemPayload {
+    pub item_id: Uuid,
+    pub qty: Decimal,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestRevisionPayload {
+    pub notes: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RejectMechanicRequestPayload {
+    pub reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CancelMechanicRequestPayload {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FulfillMechanicRequestPayload {
+    pub notes: Option<String>,
+    pub items: Option<Vec<ApproveItemPayload>>,
+}
+
+// --- Mobile Devices Master Data ---
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MobileDevice {
+    pub device_id: String,
+    pub device_name: String,
+    pub assigned_warehouse_id: Option<String>,
+    pub assigned_warehouse_name: Option<String>,
+    pub assigned_user_id: Option<Uuid>,
+    pub assigned_user_name: Option<String>,
+    pub app_version: Option<String>,
+    pub is_active: bool,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub photo_url: Option<String>,
+    pub qr_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMobileDeviceRequest {
+    pub device_id: String,
+    pub device_name: String,
+    pub assigned_warehouse_id: Option<String>,
+    pub assigned_user_id: Option<Uuid>,
+    pub app_version: Option<String>,
+    pub photo_url: Option<String>,
+    pub qr_code: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMobileDeviceRequest {
+    pub device_name: Option<String>,
+    pub assigned_warehouse_id: Option<String>,
+    pub assigned_user_id: Option<Uuid>,
+    pub app_version: Option<String>,
+    pub photo_url: Option<String>,
+    pub qr_code: Option<String>,
+    pub is_active: Option<bool>,
 }

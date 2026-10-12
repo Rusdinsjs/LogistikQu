@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                TO_CHAR(t.created_at, 'YYYY-MM') as \"period!\",\n                COALESCE(c.name, 'Umum') as \"category_name!\",\n                COUNT(DISTINCT t.id)::bigint as \"total_transactions!\",\n                COALESCE(SUM(i.qty), 0::numeric) as \"total_qty!\",\n                COALESCE(SUM(COALESCE(i.total_price, i.qty * COALESCE(p.unit_cost, 0))), 0::numeric) as \"total_value!\"\n            FROM issue_transactions t\n            JOIN issue_transaction_items i ON t.id = i.transaction_id\n            JOIN spare_parts p ON i.spare_part_id = p.id\n            LEFT JOIN part_categories c ON p.category_id = c.id\n            WHERE t.status = 'COMPLETED'\n              AND t.warehouse_id = ANY($1)\n            GROUP BY TO_CHAR(t.created_at, 'YYYY-MM'), c.name\n            ORDER BY \"period!\" DESC, \"total_value!\" DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "period!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "category_name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_transactions!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_qty!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_value!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0b7a930c0769605762aee05b3edb784aac172d736232f4821931bfe09fb5671d"
+}

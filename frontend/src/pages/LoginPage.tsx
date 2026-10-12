@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Warehouse, Lock, User, ArrowRight, Shield, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, ArrowRight, Shield, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export const LoginPage: React.FC = () => {
-  const { login, loading } = useAuth();
+  const { login } = useAuth();
   const [username, setUsername] = useState('superadmin');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       await login(username, password);
     } catch (err: any) {
@@ -22,31 +24,41 @@ export const LoginPage: React.FC = () => {
         err?.message ||
         'Gagal login. Pastikan server backend sedang aktif.'
       );
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const demoAccounts = [
-    { username: 'superadmin', role: 'Super Admin', desc: 'Akses teknis root seluruh modul & sistem' },
-    { username: 'manager', role: 'Manager Logistik', desc: 'Akses executive semua gudang, approval & manajemen user' },
-    { username: 'supervisor_he', role: 'Supervisor Alat Berat', desc: 'Khusus mengawasi & approval WH-MAIN-HE & WH-CONT-HE' },
-    { username: 'supervisor_dt', role: 'Supervisor Dump Truck', desc: 'Khusus mengawasi & approval WH-MAIN-DT & WH-CONT-DT' },
-    { username: 'admin_main_he', role: 'Admin Utama Alat Berat', desc: 'Verifikasi request & supply drop kontainer HE' },
-    { username: 'admin_main_dt', role: 'Admin Utama Dump Truck', desc: 'Verifikasi request & supply drop kontainer DT' },
-    { username: 'admin_cont_he', role: 'Admin Kontainer Alat Berat', desc: 'POS issue, request stok, saldo kontainer HE' },
-    { username: 'admin_cont_dt', role: 'Admin Kontainer Dump Truck', desc: 'POS issue, request stok, saldo kontainer DT' },
+    { username: 'mekanik_he', role: 'Mekanik Alat Berat', category: 'Mekanik', desc: 'Permohonan stok WH-CONT-HE (EMP-101)', tagClass: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
+    { username: 'mekanik_dt', role: 'Mekanik Dump Truck', category: 'Mekanik', desc: 'Permohonan stok WH-CONT-DT (EMP-103)', tagClass: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
+    { username: 'admin_cont_he', role: 'Admin Kontainer HE', category: 'Kontainer', desc: 'POS issue, request stok, saldo kontainer HE', tagClass: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+    { username: 'admin_cont_dt', role: 'Admin Kontainer DT', category: 'Kontainer', desc: 'POS issue, request stok, saldo kontainer DT', tagClass: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
+    { username: 'supervisor_he', role: 'Supervisor Alat Berat', category: 'Supervisor', desc: 'Khusus mengawasi & approval WH-MAIN-HE & WH-CONT-HE', tagClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+    { username: 'supervisor_dt', role: 'Supervisor Dump Truck', category: 'Supervisor', desc: 'Khusus mengawasi & approval WH-MAIN-DT & WH-CONT-DT', tagClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+    { username: 'admin_main_he', role: 'Admin Utama HE', category: 'Gudang Utama', desc: 'Verifikasi request & supply drop kontainer HE', tagClass: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+    { username: 'admin_main_dt', role: 'Admin Utama DT', category: 'Gudang Utama', desc: 'Verifikasi request & supply drop kontainer DT', tagClass: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+    { username: 'manager', role: 'Manager Logistik', category: 'Manajemen', desc: 'Akses executive semua gudang & approval', tagClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
+    { username: 'superadmin', role: 'Super Admin', category: 'Sistem', desc: 'Akses teknis root seluruh modul & sistem', tagClass: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
   ];
 
   const handleQuickLogin = (uname: string) => {
     setUsername(uname);
+    setPassword('password123');
     setError(null);
-    login(uname).catch((err: any) => {
-      console.error('Quick login error:', err);
-      setError(
-        err?.response?.data?.error ||
-        err?.message ||
-        'Gagal login demo. Pastikan server backend sedang aktif.'
-      );
-    });
+    setSubmitting(true);
+    login(uname, 'password123')
+      .catch((err: any) => {
+        console.error('Quick login error:', err);
+        setError(
+          err?.response?.data?.error ||
+          err?.message ||
+          'Gagal login demo. Pastikan server backend sedang aktif.'
+        );
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
   };
 
   return (
@@ -59,9 +71,11 @@ export const LoginPage: React.FC = () => {
         <div className="glass-panel rounded-2xl p-8 flex flex-col justify-between border border-slate-800 shadow-2xl">
           <div>
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 w-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                <Warehouse className="h-7 w-7" />
-              </div>
+              <img
+                src="/logo.png"
+                alt="SJS-VIPO Logo"
+                className="h-12 w-12 rounded-xl object-contain border border-cyan-500/30 bg-slate-900 shadow-md p-1"
+              />
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
                   Logistic<span className="text-cyan-400">Qu</span>
@@ -129,10 +143,10 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={submitting}
                 className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white text-xs font-semibold shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
               >
-                {loading ? 'Memproses...' : 'Masuk Sekarang'}
+                {submitting ? 'Memproses...' : 'Masuk Sekarang'}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </form>
@@ -151,26 +165,30 @@ export const LoginPage: React.FC = () => {
               <Shield className="h-5 w-5 text-cyan-400" />
               <h2 className="text-sm font-bold text-white">Akun Demo Cepat (1-Klik)</h2>
             </div>
-            <p className="text-xs text-slate-400 mb-5">
+            <p className="text-xs text-slate-400 mb-4">
               Klik salah satu peran di bawah untuk login langsung menguji alur kerja spesifik:
             </p>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
               {demoAccounts.map((acc) => (
                 <button
                   key={acc.username}
                   type="button"
+                  disabled={submitting}
                   onClick={() => handleQuickLogin(acc.username)}
-                  className="w-full text-left p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-800/60 transition-all group flex items-start justify-between"
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-800/60 transition-all group flex items-start justify-between disabled:opacity-50"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-slate-200 group-hover:text-cyan-300">
                         {acc.role}
                       </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${acc.tagClass}`}>
+                        {acc.category}
+                      </span>
                       <span className="text-[10px] text-slate-500 font-mono">@{acc.username}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{acc.desc}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{acc.desc}</p>
                   </div>
                   <CheckCircle2 className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 shrink-0 mt-0.5 transition-colors" />
                 </button>

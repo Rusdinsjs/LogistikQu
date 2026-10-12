@@ -582,6 +582,71 @@ impl SyncService {
 
                     success_ids.push(tx_id);
                 }
+                "MECHANIC_REQUEST" => {
+                    let already_processed = sqlx::query_as::<_, (bool,)>(
+                        "SELECT EXISTS(SELECT 1 FROM mechanic_requests WHERE client_uuid = $1)",
+                    )
+                    .bind(tx_id)
+                    .fetch_one(&self.pool)
+                    .await?
+                    .0;
+
+                    if already_processed {
+                        success_ids.push(tx_id);
+                        continue;
+                    }
+
+                    match serde_json::from_value::<
+                        crate::domain::entities::CreateMechanicRequestPayload,
+                    >(item.payload.clone())
+                    {
+                        Ok(mut mrq_payload) => {
+                            mrq_payload.client_uuid = Some(tx_id);
+                            let mechanic_service =
+                                crate::application::services::MechanicRequestService::new(
+                                    self.pool.clone(),
+                                );
+
+                            let claims = match sqlx::query_as::<_, (String, String)>(
+                                "SELECT username, role FROM users WHERE id = $1",
+                            )
+                            .bind(acting_user_id)
+                            .fetch_optional(&self.pool)
+                            .await?
+                            {
+                                Some((uname, role)) => crate::domain::entities::Claims {
+                                    sub: acting_user_id,
+                                    username: uname,
+                                    role_id: role,
+                                    exp: 0,
+                                },
+                                None => crate::domain::entities::Claims {
+                                    sub: acting_user_id,
+                                    username: "mobile_user".to_string(),
+                                    role_id: "MECHANIC".to_string(),
+                                    exp: 0,
+                                },
+                            };
+
+                            match mechanic_service
+                                .create_request(&claims, mrq_payload, true)
+                                .await
+                            {
+                                Ok(_) => success_ids.push(tx_id),
+                                Err(e) => failed_ids.push(SyncFailedItem {
+                                    id: tx_id,
+                                    error: e.to_string(),
+                                }),
+                            }
+                        }
+                        Err(e) => {
+                            failed_ids.push(SyncFailedItem {
+                                id: tx_id,
+                                error: format!("Payload permohonan mekanik tidak valid: {}", e),
+                            });
+                        }
+                    }
+                }
                 _ => {
                     // Other general sync operations
                     success_ids.push(tx_id);

@@ -1,9 +1,10 @@
 use crate::{
     domain::entities::{
-        Claims, CreateEmployeeRequest, CreateEquipmentRequest, CreateSiteRequest,
-        CreateWarehouseCategoryRequest, CreateWarehouseRequest, Employee, Equipment, Site,
-        SparePart, UpdateSiteRequest, UpdateSparePartRequest, UpdateWarehouseCategoryRequest,
-        UpdateWarehouseRequest, WarehouseCategory, WarehouseInfo,
+        Claims, CreateEmployeeRequest, CreateEquipmentRequest, CreateMobileDeviceRequest,
+        CreateSiteRequest, CreateWarehouseCategoryRequest, CreateWarehouseRequest, Employee,
+        Equipment, MobileDevice, Site, SparePart, UpdateMobileDeviceRequest, UpdateSiteRequest,
+        UpdateSparePartRequest, UpdateWarehouseCategoryRequest, UpdateWarehouseRequest,
+        WarehouseCategory, WarehouseInfo,
     },
     error::AppError,
     infrastructure::repositories::{AuditRepository, MasterRepository},
@@ -866,6 +867,294 @@ impl MasterService {
             "success": true,
             "is_soft_deleted": false,
             "message": format!("Kategori '{}' berhasil dihapus", existing.name)
+        }))
+    }
+
+    // --- Mobile Devices Master Data ---
+    pub async fn list_devices(&self) -> Result<Vec<MobileDevice>, AppError> {
+        let devices = sqlx::query_as::<_, MobileDevice>(
+            r#"
+            SELECT 
+                d.device_id,
+                d.device_name,
+                d.assigned_warehouse_id,
+                w.name AS assigned_warehouse_name,
+                d.assigned_user_id,
+                u.full_name AS assigned_user_name,
+                d.app_version,
+                d.is_active,
+                d.last_sync_at,
+                d.photo_url,
+                COALESCE(d.qr_code, 'DEVICE:' || d.device_id) AS qr_code,
+                d.created_at
+            FROM mobile_devices d
+            LEFT JOIN warehouses w ON d.assigned_warehouse_id = w.id
+            LEFT JOIN users u ON d.assigned_user_id = u.id
+            ORDER BY d.device_id ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(devices)
+    }
+
+    pub async fn create_device(
+        &self,
+        claims: &Claims,
+        payload: CreateMobileDeviceRequest,
+    ) -> Result<MobileDevice, AppError> {
+        let device_id = payload.device_id.trim().to_uppercase();
+        if device_id.is_empty() {
+            return Err(AppError::BadRequest("Device ID tidak boleh kosong".into()));
+        }
+        let device_name = payload.device_name.trim().to_string();
+        if device_name.is_empty() {
+            return Err(AppError::BadRequest(
+                "Nama perangkat tidak boleh kosong".into(),
+            ));
+        }
+
+        let is_active = payload.is_active.unwrap_or(true);
+        let app_version = payload.app_version.unwrap_or_else(|| "2.0.0".to_string());
+        let qr_code = payload
+            .qr_code
+            .unwrap_or_else(|| format!("DEVICE:{}", device_id));
+
+        let existing = sqlx::query_as::<_, (String,)>(
+            "SELECT device_id FROM mobile_devices WHERE device_id = $1",
+        )
+        .bind(&device_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if existing.is_some() {
+            return Err(AppError::BadRequest(format!(
+                "Perangkat dengan ID '{}' sudah terdaftar",
+                device_id
+            )));
+        }
+
+        let inserted = sqlx::query_as::<_, MobileDevice>(
+            r#"
+            INSERT INTO mobile_devices (device_id, device_name, assigned_warehouse_id, assigned_user_id, app_version, photo_url, qr_code, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING 
+                device_id,
+                device_name,
+                assigned_warehouse_id,
+                (SELECT name FROM warehouses WHERE id = assigned_warehouse_id) AS assigned_warehouse_name,
+                assigned_user_id,
+                (SELECT full_name FROM users WHERE id = assigned_user_id) AS assigned_user_name,
+                app_version,
+                is_active,
+                last_sync_at,
+                photo_url,
+                qr_code,
+                created_at
+            "#,
+        )
+        .bind(&device_id)
+        .bind(&device_name)
+        .bind(payload.assigned_warehouse_id)
+        .bind(payload.assigned_user_id)
+        .bind(&app_version)
+        .bind(payload.photo_url)
+        .bind(&qr_code)
+        .bind(is_active)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let _ = self
+            .audit_repo
+            .record_log(
+                Some(claims.sub),
+                Some(&claims.username),
+                "CREATE_MOBILE_DEVICE",
+                "MOBILE_DEVICE",
+                Some(&device_id),
+                Some(json!({
+                    "device_id": &device_id,
+                    "device_name": &device_name,
+                    "warehouse_id": inserted.assigned_warehouse_id,
+                    "is_active": is_active
+                })),
+            )
+            .await;
+
+        Ok(inserted)
+    }
+
+    pub async fn update_device(
+        &self,
+        claims: &Claims,
+        id: &str,
+        payload: UpdateMobileDeviceRequest,
+    ) -> Result<MobileDevice, AppError> {
+        let existing = sqlx::query_as::<_, MobileDevice>(
+            r#"
+            SELECT 
+                d.device_id,
+                d.device_name,
+                d.assigned_warehouse_id,
+                w.name AS assigned_warehouse_name,
+                d.assigned_user_id,
+                u.full_name AS assigned_user_name,
+                d.app_version,
+                d.is_active,
+                d.last_sync_at,
+                d.photo_url,
+                COALESCE(d.qr_code, 'DEVICE:' || d.device_id) AS qr_code,
+                d.created_at
+            FROM mobile_devices d
+            LEFT JOIN warehouses w ON d.assigned_warehouse_id = w.id
+            LEFT JOIN users u ON d.assigned_user_id = u.id
+            WHERE d.device_id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Perangkat '{}' tidak ditemukan", id)))?;
+
+        let device_name = payload.device_name.unwrap_or(existing.device_name);
+        let assigned_warehouse_id = payload
+            .assigned_warehouse_id
+            .or(existing.assigned_warehouse_id);
+        let assigned_user_id = payload.assigned_user_id.or(existing.assigned_user_id);
+        let app_version = payload.app_version.or(existing.app_version);
+        let photo_url = payload.photo_url.or(existing.photo_url);
+        let qr_code = payload.qr_code.or(existing.qr_code);
+        let is_active = payload.is_active.unwrap_or(existing.is_active);
+
+        let updated = sqlx::query_as::<_, MobileDevice>(
+            r#"
+            UPDATE mobile_devices
+            SET device_name = $1,
+                assigned_warehouse_id = $2,
+                assigned_user_id = $3,
+                app_version = $4,
+                photo_url = $5,
+                qr_code = $6,
+                is_active = $7
+            WHERE device_id = $8
+            RETURNING 
+                device_id,
+                device_name,
+                assigned_warehouse_id,
+                (SELECT name FROM warehouses WHERE id = assigned_warehouse_id) AS assigned_warehouse_name,
+                assigned_user_id,
+                (SELECT full_name FROM users WHERE id = assigned_user_id) AS assigned_user_name,
+                app_version,
+                is_active,
+                last_sync_at,
+                photo_url,
+                qr_code,
+                created_at
+            "#,
+        )
+        .bind(&device_name)
+        .bind(assigned_warehouse_id)
+        .bind(assigned_user_id)
+        .bind(app_version)
+        .bind(photo_url)
+        .bind(qr_code)
+        .bind(is_active)
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let _ = self
+            .audit_repo
+            .record_log(
+                Some(claims.sub),
+                Some(&claims.username),
+                "UPDATE_MOBILE_DEVICE",
+                "MOBILE_DEVICE",
+                Some(id),
+                Some(json!({
+                    "device_name": &device_name,
+                    "is_active": is_active
+                })),
+            )
+            .await;
+
+        Ok(updated)
+    }
+
+    pub async fn delete_device(&self, claims: &Claims, id: &str) -> Result<Value, AppError> {
+        let existing = sqlx::query_as::<_, (String, String)>(
+            "SELECT device_id, device_name FROM mobile_devices WHERE device_id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Perangkat '{}' tidak ditemukan", id)))?;
+
+        // Check if device is linked in transactions or requests
+        let is_used_in_issues = sqlx::query_as::<_, (i64,)>(
+            "SELECT COUNT(*) FROM issue_transactions WHERE device_id = $1",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?
+        .0 > 0;
+
+        let is_used_in_mechanic = sqlx::query_as::<_, (i64,)>(
+            "SELECT COUNT(*) FROM mechanic_requests WHERE device_id = $1",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?
+        .0 > 0;
+
+        if is_used_in_issues || is_used_in_mechanic {
+            // Soft deactivate to maintain integrity of history/audit trail
+            sqlx::query("UPDATE mobile_devices SET is_active = FALSE WHERE device_id = $1")
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+
+            let _ = self
+                .audit_repo
+                .record_log(
+                    Some(claims.sub),
+                    Some(&claims.username),
+                    "DEACTIVATE_MOBILE_DEVICE",
+                    "MOBILE_DEVICE",
+                    Some(id),
+                    Some(json!({ "reason": "has_transactions_soft_deactivated" })),
+                )
+                .await;
+
+            return Ok(json!({
+                "success": true,
+                "is_soft_deleted": true,
+                "message": format!("Perangkat '{}' memiliki riwayat transaksi sehingga dinonaktifkan demi integritas data", existing.1)
+            }));
+        }
+
+        sqlx::query("DELETE FROM mobile_devices WHERE device_id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+
+        let _ = self
+            .audit_repo
+            .record_log(
+                Some(claims.sub),
+                Some(&claims.username),
+                "DELETE_MOBILE_DEVICE",
+                "MOBILE_DEVICE",
+                Some(id),
+                Some(json!({ "device_name": existing.1 })),
+            )
+            .await;
+
+        Ok(json!({
+            "success": true,
+            "is_soft_deleted": false,
+            "message": format!("Perangkat '{}' berhasil dihapus", existing.1)
         }))
     }
 }

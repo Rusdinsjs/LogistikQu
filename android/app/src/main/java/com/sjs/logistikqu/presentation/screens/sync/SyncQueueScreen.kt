@@ -50,7 +50,7 @@ fun SyncQueueScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) {
                 IndustrialButton(
-                    text = if (uiState.isOnline) "SINKRONKAN SEKARANG KE SERVER" else "OFFLINE - MENUNGGU JARINGAN TAMBANG",
+                    text = if (uiState.isOnline) "SINKRONKAN SEKARANG KE SERVER" else "OFFLINE - MENUNGGU JARINGAN",
                     onClick = viewModel::triggerSyncNow,
                     isLoading = uiState.isSyncing,
                     icon = Icons.Default.Sync,
@@ -92,7 +92,7 @@ fun SyncQueueScreen(
                         color = if (uiState.isOnline) IndustrialEmerald.copy(alpha = 0.2f) else IndustrialAmber.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = if (uiState.isOnline) "SERVER TERHUBUNG" else "DEAD ZONE TAMBANG",
+                            text = if (uiState.isOnline) "SERVER TERHUBUNG" else "DEAD ZONE OFFLINE",
                             color = if (uiState.isOnline) IndustrialEmerald else IndustrialAmber,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,

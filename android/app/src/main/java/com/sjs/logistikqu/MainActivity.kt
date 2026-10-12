@@ -1,6 +1,7 @@
 package com.sjs.logistikqu
 
 import android.os.Bundle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.fragment.app.FragmentActivity
 import androidx.navigation.compose.rememberNavController
@@ -14,6 +15,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         // Apply Enterprise Security: Screenshot & Screen Recording Protection (FLAG_SECURE)
         SecurityManager.applyWindowSecurity(this)

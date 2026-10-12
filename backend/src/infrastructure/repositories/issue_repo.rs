@@ -60,15 +60,15 @@ impl IssueRepository {
     ) -> Result<Vec<IssueTransaction>, AppError> {
         let search_pattern = format!("%{}%", search);
 
-        let issues = sqlx::query_as!(
-            IssueTransaction,
+        let issues = sqlx::query_as::<_, IssueTransaction>(
             r#"
             SELECT id, transaction_number, warehouse_id, site_id, receiver_name,
                    receiver_employee_id, receiver_department, unit_number, unit_name,
                    unit_type, ct_number, serial_number, hm_km, mechanic_name,
                    mechanic_id, work_order_number, maintenance_type, priority,
-                   status, notes, evidence_photo_url, document_url, created_by,
-                   approved_by, created_at
+                   status, notes, evidence_photo_url, document_url,
+                   mechanic_signature_url, signature_type, receipt_printed, receipt_printed_at, signed_receipt_photo_url,
+                   created_by, approved_by, created_at
             FROM issue_transactions
             WHERE ($1 = '' OR warehouse_id = $1)
               AND ($2 = '' OR status = $2)
@@ -77,12 +77,12 @@ impl IssueRepository {
             ORDER BY created_at DESC
             LIMIT 100
             "#,
-            wh_filter,
-            status_filter,
-            user_whs,
-            search,
-            search_pattern
         )
+        .bind(wh_filter)
+        .bind(status_filter)
+        .bind(user_whs)
+        .bind(search)
+        .bind(&search_pattern)
         .fetch_all(&self.pool)
         .await?;
 
@@ -90,20 +90,20 @@ impl IssueRepository {
     }
 
     pub async fn get_issue_by_id(&self, id: Uuid) -> Result<Option<IssueTransaction>, AppError> {
-        let issue = sqlx::query_as!(
-            IssueTransaction,
+        let issue = sqlx::query_as::<_, IssueTransaction>(
             r#"
             SELECT id, transaction_number, warehouse_id, site_id, receiver_name,
                    receiver_employee_id, receiver_department, unit_number, unit_name,
                    unit_type, ct_number, serial_number, hm_km, mechanic_name,
                    mechanic_id, work_order_number, maintenance_type, priority,
-                   status, notes, evidence_photo_url, document_url, created_by,
-                   approved_by, created_at
+                   status, notes, evidence_photo_url, document_url,
+                   mechanic_signature_url, signature_type, receipt_printed, receipt_printed_at, signed_receipt_photo_url,
+                   created_by, approved_by, created_at
             FROM issue_transactions
             WHERE id = $1
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 

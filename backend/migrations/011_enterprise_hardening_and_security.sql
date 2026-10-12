@@ -46,7 +46,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ DEFAULT NULL
 -- 4. REFRESH TOKEN ROTATION & SESSION MANAGEMENT
 -- ============================================================================
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS ip_address VARCHAR(50);
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS ip_address VARCHAR(255);
+ALTER TABLE refresh_tokens ALTER COLUMN ip_address TYPE VARCHAR(255);
+ALTER TABLE audit_logs ALTER COLUMN ip_address TYPE VARCHAR(255);
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS user_agent TEXT;
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ DEFAULT now();
 

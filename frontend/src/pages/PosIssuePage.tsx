@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { inventoryApi, issueApi, masterApi } from '../api';
 import type { Employee, Equipment, InventoryStockItem, Site } from '../types';
+import { SignaturePad } from '../components/common';
 import {
   ShoppingCart,
   Plus,
@@ -19,7 +20,27 @@ import {
   RotateCcw,
   UserPlus,
   Truck,
+  PenTool,
+  AlertCircle,
+  ShieldAlert,
 } from 'lucide-react';
+
+import {
+  isDumpTruckEquipment,
+  isHeavyEquipment,
+  isDumpTruckMechanic,
+  isHeavyEquipmentMechanic,
+  getWarehouseCategory,
+  getUserFleetCategory,
+} from '../utils/fleetCategory';
+export {
+  isDumpTruckEquipment,
+  isHeavyEquipment,
+  isDumpTruckMechanic,
+  isHeavyEquipmentMechanic,
+  getWarehouseCategory,
+  getUserFleetCategory,
+};
 
 export const PosIssuePage: React.FC = () => {
   const { activeWarehouse, activeWarehouseInfo, user } = useAuth();
@@ -31,6 +52,23 @@ export const PosIssuePage: React.FC = () => {
   const [mechanicList, setMechanicList] = useState<Employee[]>([]);
   const [siteList, setSiteList] = useState<Site[]>([]);
   const [searchPart, setSearchPart] = useState('');
+
+  // Fleet Category Filter (HE vs DT vs ALL)
+  const userDivision = getUserFleetCategory(user);
+  const warehouseCategory =
+    userDivision !== 'ALL'
+      ? userDivision
+      : getWarehouseCategory(activeWarehouse, activeWarehouseInfo?.category);
+  const [fleetCategoryFilter, setFleetCategoryFilter] = useState<'HE' | 'DT' | 'ALL'>(warehouseCategory);
+
+  // Auto-sync category filter when warehouse or user changes
+  useEffect(() => {
+    const targetCat =
+      userDivision !== 'ALL'
+        ? userDivision
+        : getWarehouseCategory(activeWarehouse, activeWarehouseInfo?.category);
+    setFleetCategoryFilter(targetCat);
+  }, [activeWarehouse, activeWarehouseInfo?.category, userDivision]);
 
   // View Mode: 'kanban' | 'list'
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
@@ -77,6 +115,14 @@ export const PosIssuePage: React.FC = () => {
   const [newMechanicPosition, setNewMechanicPosition] = useState('Mekanik Alat Berat');
   const [savingMechanic, setSavingMechanic] = useState(false);
 
+  // Mechanic Signature & Verification
+  const [signatureType, setSignatureType] = useState<'DIGITAL' | 'PHYSICAL'>('DIGITAL');
+  const [mechanicSignatureUrl, setMechanicSignatureUrl] = useState<string | null>(null);
+  const [physicalSignConfirmed, setPhysicalSignConfirmed] = useState(false);
+  const [signedReceiptPhotoUrl, setSignedReceiptPhotoUrl] = useState<string | null>(null);
+  const signedReceiptPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [showUnprintedWarning, setShowUnprintedWarning] = useState(false);
+
   // UI States
   const [submitting, setSubmitting] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -102,6 +148,90 @@ export const PosIssuePage: React.FC = () => {
     };
     loadMasters();
   }, [activeWarehouse]);
+
+  // Handle category filter change with auto-clearing incompatible selection
+  const handleCategoryFilterChange = (newCat: 'HE' | 'DT' | 'ALL') => {
+    setFleetCategoryFilter(newCat);
+    if (selectedUnitId) {
+      const currentEq = equipmentList.find((e) => e.id === selectedUnitId);
+      if (currentEq) {
+        const isDt = isDumpTruckEquipment(currentEq);
+        if (newCat === 'HE' && isDt) {
+          setSelectedUnitId('');
+          setUnitNumber('');
+          setUnitName('');
+          setCtNumber('');
+          setHmKm(undefined);
+        } else if (newCat === 'DT' && !isDt) {
+          setSelectedUnitId('');
+          setUnitNumber('');
+          setUnitName('');
+          setCtNumber('');
+          setHmKm(undefined);
+        }
+      }
+    }
+    if (mechanicName) {
+      const currentM = mechanicList.find((m) => m.name === mechanicName);
+      if (currentM) {
+        const isDt = isDumpTruckMechanic(currentM);
+        if (newCat === 'HE' && isDt) {
+          setMechanicName('');
+        } else if (newCat === 'DT' && !isDt) {
+          setMechanicName('');
+        }
+      }
+    }
+  };
+
+  // Filtered Equipment & Mechanic based on HE/DT filter
+  const filteredEquipmentList = useMemo(() => {
+    if (fleetCategoryFilter === 'DT') {
+      return equipmentList.filter(isDumpTruckEquipment);
+    }
+    if (fleetCategoryFilter === 'HE') {
+      return equipmentList.filter((eq) => isHeavyEquipment(eq) || !isDumpTruckEquipment(eq));
+    }
+    return equipmentList;
+  }, [equipmentList, fleetCategoryFilter]);
+
+  const filteredMechanicList = useMemo(() => {
+    if (fleetCategoryFilter === 'DT') {
+      return mechanicList.filter(isDumpTruckMechanic);
+    }
+    if (fleetCategoryFilter === 'HE') {
+      return mechanicList.filter((m) => isHeavyEquipmentMechanic(m) || !isDumpTruckMechanic(m));
+    }
+    return mechanicList;
+  }, [mechanicList, fleetCategoryFilter]);
+
+  const heEquipmentCount = useMemo(
+    () => equipmentList.filter((eq) => isHeavyEquipment(eq) || !isDumpTruckEquipment(eq)).length,
+    [equipmentList]
+  );
+  const dtEquipmentCount = useMemo(
+    () => equipmentList.filter(isDumpTruckEquipment).length,
+    [equipmentList]
+  );
+
+  // Handle modal openers with smart pre-selection
+  const handleOpenAddUnitModal = () => {
+    if (fleetCategoryFilter === 'DT') {
+      setNewUnitType('DUMP_TRUCK');
+    } else {
+      setNewUnitType('HEAVY_EQUIPMENT');
+    }
+    setShowAddUnitModal(true);
+  };
+
+  const handleOpenAddMechanicModal = () => {
+    if (fleetCategoryFilter === 'DT') {
+      setNewMechanicPosition('Dump Truck Senior Mechanic');
+    } else {
+      setNewMechanicPosition('Senior Heavy Equipment Mechanic');
+    }
+    setShowAddMechanicModal(true);
+  };
 
   // Handle Equipment selection auto-fill
   const handleSelectEquipment = (unitId: string) => {
@@ -228,8 +358,9 @@ export const PosIssuePage: React.FC = () => {
         current_hm_km: newUnitHmKm,
       });
 
+      const eqId = (created as any).id || (created as any).equipment_id || newUnitNumber.trim().toUpperCase();
       const newEquipment: Equipment = {
-        id: created.equipment_id,
+        id: eqId,
         unit_number: newUnitNumber.trim().toUpperCase(),
         name: newUnitName.trim(),
         equipment_type_id: newUnitType,
@@ -239,7 +370,7 @@ export const PosIssuePage: React.FC = () => {
       };
 
       setEquipmentList([newEquipment, ...equipmentList]);
-      setSelectedUnitId(created.equipment_id);
+      setSelectedUnitId(eqId);
       setUnitNumber(newEquipment.unit_number);
       setUnitName(newEquipment.name);
       setUnitType(newEquipment.equipment_type_id || 'HEAVY_EQUIPMENT');
@@ -268,16 +399,24 @@ export const PosIssuePage: React.FC = () => {
 
     setSavingMechanic(true);
     try {
+      const targetDept = fleetCategoryFilter === 'DT' ? 'DEPT-MECH-DT' : 'DEPT-MECH-HE';
+      const targetPos =
+        newMechanicPosition.trim() ||
+        (fleetCategoryFilter === 'DT' ? 'Dump Truck Senior Mechanic' : 'Senior Heavy Equipment Mechanic');
+
       const created = await masterApi.createEmployee({
         name: newMechanicName.trim(),
-        position: newMechanicPosition.trim() || 'Mekanik',
+        department_id: targetDept,
+        position: targetPos,
         is_mechanic: true,
       });
 
+      const empId = (created as any).id || (created as any).employee_id || `EMP-${newMechanicName.trim()}`;
       const newEmp: Employee = {
-        id: created.employee_id,
+        id: empId,
         name: newMechanicName.trim(),
-        position: newMechanicPosition.trim() || 'Mekanik',
+        department_id: targetDept,
+        position: targetPos,
         is_mechanic: true,
         is_active: true,
       };
@@ -307,6 +446,16 @@ export const PosIssuePage: React.FC = () => {
       return;
     }
 
+    if (signatureType === 'DIGITAL' && !mechanicSignatureUrl) {
+      alert(`SOP Wajib: Mekanik penanggung jawab (${mechanicName}) wajib membubuhkan tanda tangan digital di layar terlebih dahulu!`);
+      return;
+    }
+
+    if (signatureType === 'PHYSICAL' && !physicalSignConfirmed) {
+      alert(`SOP Wajib: Harap centang konfirmasi bahwa struk fisik wajib dicetak dan ditandatangani basah oleh mekanik (${mechanicName})!`);
+      return;
+    }
+
     setSubmitting(true);
     setDuplicateWarning(null);
 
@@ -325,6 +474,10 @@ export const PosIssuePage: React.FC = () => {
       notes: notes || undefined,
       evidence_photo_url: evidencePhotoUrl || undefined,
       document_url: documentUrl || undefined,
+      mechanic_signature_url: mechanicSignatureUrl || undefined,
+      signature_type: signatureType,
+      receipt_printed: false,
+      signed_receipt_photo_url: signedReceiptPhotoUrl || undefined,
       items: cart.map((c) => ({
         spare_part_id: c.part.spare_part_id,
         qty: c.qty,
@@ -345,11 +498,15 @@ export const PosIssuePage: React.FC = () => {
         has_core_return: hasCoreReturnItems,
         evidence_photo_url: evidencePhotoUrl,
         document_file_name: documentFileName,
+        signature_type: signatureType,
+        mechanic_signature_url: mechanicSignatureUrl,
+        has_printed: false,
         date: new Date().toLocaleString('id-ID'),
         warehouse_name: activeWarehouseInfo?.name,
+        admin_name: user?.full_name || user?.username,
       });
 
-      // Reset form
+      // Reset form & signature
       setCart([]);
       setReceiverName('');
       setSelectedUnitId('');
@@ -362,6 +519,9 @@ export const PosIssuePage: React.FC = () => {
       setEvidencePhotoUrl(null);
       setDocumentUrl(null);
       setDocumentFileName(null);
+      setMechanicSignatureUrl(null);
+      setPhysicalSignConfirmed(false);
+      setSignedReceiptPhotoUrl(null);
 
       // Refresh stock
       const freshStocks = await inventoryApi.getStock(activeWarehouse);
@@ -371,6 +531,70 @@ export const PosIssuePage: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!successReceipt) return;
+    try {
+      if (successReceipt.issue_id) {
+        await issueApi.recordReceiptPrinted(successReceipt.issue_id, signedReceiptPhotoUrl || undefined);
+      }
+    } catch (err) {
+      console.error('Gagal mencatat status struk dicetak di server', err);
+    }
+    setSuccessReceipt((prev: any) => (prev ? { ...prev, has_printed: true } : null));
+    window.print();
+  };
+
+  const handleCloseReceiptModal = () => {
+    if (!successReceipt) return;
+    if (!successReceipt.has_printed) {
+      setShowUnprintedWarning(true);
+      return;
+    }
+    setSuccessReceipt(null);
+    setShowUnprintedWarning(false);
+  };
+
+  const handleSignedReceiptPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDimension = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+        setSignedReceiptPhotoUrl(dataUrl);
+        if (successReceipt?.issue_id) {
+          issueApi.recordReceiptPrinted(successReceipt.issue_id, dataUrl).catch(console.error);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const filteredParts = availableStock.filter(
@@ -720,14 +944,99 @@ export const PosIssuePage: React.FC = () => {
                 />
               </div>
 
+              {/* Fleet Category Filter (HE vs DT) */}
+              <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 shadow-inner space-y-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Kategori Armada & Mekanik:</span>
+                  </span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold border flex items-center gap-1 ${
+                      warehouseCategory === 'HE'
+                        ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
+                        : warehouseCategory === 'DT'
+                        ? 'bg-amber-950/60 text-amber-300 border-amber-500/40'
+                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    <span>Divisi:</span>
+                    <span>{warehouseCategory === 'HE' ? 'HE (Alat Berat)' : warehouseCategory === 'DT' ? 'DT (Dump Truck)' : 'Semua Armada'}</span>
+                  </span>
+                </div>
+
+                {userDivision === 'ALL' ? (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleCategoryFilterChange('HE')}
+                      className={`px-2 py-1.5 text-xs rounded-lg font-medium transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        fleetCategoryFilter === 'HE'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-sm shadow-cyan-950 font-bold'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                      }`}
+                    >
+                      <span>🚜 HE (Alat Berat)</span>
+                      <span className="text-[10px] opacity-75 font-mono">({heEquipmentCount})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCategoryFilterChange('DT')}
+                      className={`px-2 py-1.5 text-xs rounded-lg font-medium transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        fleetCategoryFilter === 'DT'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-950 font-bold'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                      }`}
+                    >
+                      <span>🚚 DT (Dump Truck)</span>
+                      <span className="text-[10px] opacity-75 font-mono">({dtEquipmentCount})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCategoryFilterChange('ALL')}
+                      className={`px-2 py-1.5 text-xs rounded-lg font-medium transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        fleetCategoryFilter === 'ALL'
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50 shadow-sm shadow-purple-950 font-bold'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/60'
+                      }`}
+                    >
+                      <span>Semua</span>
+                      <span className="text-[10px] opacity-75 font-mono">({equipmentList.length})</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className={`px-3 py-1.5 text-xs rounded-lg font-bold flex items-center justify-between border ${
+                      userDivision === 'HE'
+                        ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                        : 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    <span>
+                      {userDivision === 'HE'
+                        ? '🚜 Khusus Unit & Mekanik Heavy Equipment (HE)'
+                        : '🚚 Khusus Unit & Mekanik Dump Truck (DT)'}
+                    </span>
+                    <span className="text-[10px] font-mono">
+                      ({filteredEquipmentList.length} Unit)
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Unit Equipment Selection & Quick Add */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] text-slate-400">Pilih Unit Equipment *</label>
+                  <label className="block text-[11px] text-slate-400">
+                    Pilih Unit Equipment *{' '}
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      ({filteredEquipmentList.length} Unit {fleetCategoryFilter === 'ALL' ? 'Total' : fleetCategoryFilter})
+                    </span>
+                  </label>
                   <button
                     type="button"
-                    onClick={() => setShowAddUnitModal(true)}
-                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+                    onClick={handleOpenAddUnitModal}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Tambah Unit Baru</span>
@@ -738,13 +1047,24 @@ export const PosIssuePage: React.FC = () => {
                   onChange={(e) => handleSelectEquipment(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
                 >
-                  <option value="">-- Pilih Unit Terdaftar --</option>
-                  {equipmentList.map((eq) => (
-                    <option key={eq.id} value={eq.id}>
-                      {eq.unit_number} - {eq.name} ({eq.equipment_type_id || 'UNIT'})
-                    </option>
-                  ))}
+                  <option value="">
+                    -- Pilih Unit Terdaftar ({filteredEquipmentList.length} Unit {fleetCategoryFilter === 'ALL' ? '' : fleetCategoryFilter}) --
+                  </option>
+                  {filteredEquipmentList.map((eq) => {
+                    const cat = isDumpTruckEquipment(eq) ? 'DT' : 'HE';
+                    return (
+                      <option key={eq.id} value={eq.id}>
+                        [{cat}] {eq.unit_number} - {eq.name} ({eq.equipment_type_id || 'UNIT'})
+                      </option>
+                    );
+                  })}
                 </select>
+                {filteredEquipmentList.length === 0 && (
+                  <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Tidak ada unit terdaftar untuk filter {fleetCategoryFilter}. Klik "Tambah Unit Baru" atau pilih "Semua".
+                  </p>
+                )}
               </div>
 
               {/* Unit Details Auto-filled */}
@@ -773,11 +1093,16 @@ export const PosIssuePage: React.FC = () => {
               {/* Mechanic Selection & Quick Add */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] text-slate-400">Mekanik Penanggung Jawab *</label>
+                  <label className="block text-[11px] text-slate-400">
+                    Mekanik Penanggung Jawab *{' '}
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      ({filteredMechanicList.length} Mekanik {fleetCategoryFilter === 'ALL' ? 'Total' : fleetCategoryFilter})
+                    </span>
+                  </label>
                   <button
                     type="button"
-                    onClick={() => setShowAddMechanicModal(true)}
-                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+                    onClick={handleOpenAddMechanicModal}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <Plus className="w-3 h-3" />
                     <span>Tambah Mekanik Baru</span>
@@ -788,13 +1113,24 @@ export const PosIssuePage: React.FC = () => {
                   onChange={(e) => setMechanicName(e.target.value)}
                   className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
                 >
-                  <option value="">-- Pilih Mekanik --</option>
-                  {mechanicList.map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name} ({m.position})
-                    </option>
-                  ))}
+                  <option value="">
+                    -- Pilih Mekanik ({filteredMechanicList.length} Mekanik {fleetCategoryFilter === 'ALL' ? '' : fleetCategoryFilter}) --
+                  </option>
+                  {filteredMechanicList.map((m) => {
+                    const cat = isDumpTruckMechanic(m) ? 'DT' : 'HE';
+                    return (
+                      <option key={m.id} value={m.name}>
+                        [{cat}] {m.name} ({m.position || (cat === 'DT' ? 'Mekanik Dump Truck' : 'Mekanik Alat Berat')})
+                      </option>
+                    );
+                  })}
                 </select>
+                {filteredMechanicList.length === 0 && (
+                  <p className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Tidak ada mekanik terdaftar untuk filter {fleetCategoryFilter}. Klik "Tambah Mekanik Baru" atau pilih "Semua".
+                  </p>
+                )}
               </div>
 
               {/* Work Order & Maintenance Type */}
@@ -949,6 +1285,94 @@ export const PosIssuePage: React.FC = () => {
                 </div>
               </div>
 
+              <hr className="border-slate-800" />
+
+              {/* Section Verifikasi & Tanda Tangan Mekanik (Wajib SOP Serah Terima) */}
+              <div className="space-y-2.5 p-3.5 rounded-xl bg-slate-900/90 border border-slate-700/80 shadow-inner">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <PenTool className="w-3.5 h-3.5" />
+                    <span>Tanda Tangan Mekanik (Wajib SOP)</span>
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    SOP Serah Terima
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Admin Container wajib meminta tanda tangan mekanik penanggung jawab{' '}
+                  <strong className="text-cyan-300">{mechanicName ? `(${mechanicName})` : '(Pilih Mekanik Terlebih Dahulu)'}</strong>{' '}
+                  sebelum spare part diserahkan.
+                </p>
+
+                {/* Switcher Mode: Digital Layar vs Fisik di Struk */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950/80 rounded-lg border border-slate-800 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setSignatureType('DIGITAL')}
+                    className={`py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                      signatureType === 'DIGITAL'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <PenTool className="w-3.5 h-3.5" />
+                    <span>Digital di Layar HP</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignatureType('PHYSICAL')}
+                    className={`py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                      signatureType === 'PHYSICAL'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Basah di Struk Fisik</span>
+                  </button>
+                </div>
+
+                {signatureType === 'DIGITAL' ? (
+                  <div className="mt-2 pt-1">
+                    {!mechanicName ? (
+                      <div className="p-3 rounded-lg border border-dashed border-amber-500/40 bg-amber-500/10 text-amber-300 text-xs text-center flex items-center justify-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>Harap pilih <strong>Mekanik Penanggung Jawab</strong> di atas terlebih dahulu untuk membuka pad tanda tangan digital.</span>
+                      </div>
+                    ) : (
+                      <SignaturePad
+                        value={mechanicSignatureUrl}
+                        onChange={setMechanicSignatureUrl}
+                        signerName={mechanicName}
+                        roleLabel="Mekanik Penanggung Jawab"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] leading-relaxed">
+                        Mekanik akan membubuhkan tanda tangan basah langsung pada lembar struk cetak fisik.
+                        Admin Container <strong>WAJIB mencetak struk fisik</strong> dan memastikan tanda tangan mekanik ({mechanicName || 'Mekanik'}) telah dibubuhkan sebelum barang diserahkan.
+                      </p>
+                    </div>
+
+                    <label className="flex items-start gap-2 pt-2 border-t border-amber-500/20 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={physicalSignConfirmed}
+                        onChange={(e) => setPhysicalSignConfirmed(e.target.checked)}
+                        className="mt-0.5 rounded border-amber-500 text-cyan-500 focus:ring-0"
+                      />
+                      <span className="text-[11px] text-amber-100 font-medium">
+                        Saya (Admin Kontainer) menyatakan bahwa struk pengeluaran fisik WAJIB dicetak dan ditandatangani basah oleh Mekanik {mechanicName ? `(${mechanicName})` : ''}.
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               {/* Submit Button */}
               <button
                 type="button"
@@ -986,6 +1410,13 @@ export const PosIssuePage: React.FC = () => {
             </div>
 
             <form onSubmit={handleQuickAddUnit} className="space-y-3 text-xs">
+              <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-[11px] flex items-center justify-between text-slate-300">
+                <span>Filter Aktif Saat Ini:</span>
+                <span className="font-semibold text-cyan-300">
+                  {fleetCategoryFilter === 'DT' ? 'Dump Truck (DT)' : fleetCategoryFilter === 'HE' ? 'Heavy Equipment (HE)' : 'Umum / Semua'}
+                </span>
+              </div>
+
               <div>
                 <label className="block text-slate-400 mb-1">Nomor Lambung *</label>
                 <input
@@ -1018,12 +1449,18 @@ export const PosIssuePage: React.FC = () => {
                     onChange={(e) => setNewUnitType(e.target.value)}
                     className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:border-cyan-500 focus:outline-none"
                   >
-                    <option value="HEAVY_EQUIPMENT">Heavy Equipment</option>
-                    <option value="DUMP_TRUCK">Dump Truck</option>
-                    <option value="EXCAVATOR">Excavator</option>
-                    <option value="DOZER">Bulldozer</option>
-                    <option value="LIGHT_VEHICLE">Light Vehicle</option>
-                    <option value="SUPPORT_EQUIPMENT">Support Equipment</option>
+                    {fleetCategoryFilter !== 'DT' && (
+                      <>
+                        <option value="HEAVY_EQUIPMENT">Heavy Equipment</option>
+                        <option value="EXCAVATOR">Excavator</option>
+                        <option value="DOZER">Bulldozer</option>
+                        <option value="LIGHT_VEHICLE">Light Vehicle</option>
+                        <option value="SUPPORT_EQUIPMENT">Support Equipment</option>
+                      </>
+                    )}
+                    {fleetCategoryFilter !== 'HE' && (
+                      <option value="DUMP_TRUCK">Dump Truck</option>
+                    )}
                   </select>
                 </div>
 
@@ -1090,6 +1527,13 @@ export const PosIssuePage: React.FC = () => {
             </div>
 
             <form onSubmit={handleQuickAddMechanic} className="space-y-3 text-xs">
+              <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-[11px] flex items-center justify-between text-slate-300">
+                <span>Departemen Penugasan:</span>
+                <span className="font-semibold text-cyan-300">
+                  {fleetCategoryFilter === 'DT' ? 'Dump Truck (DEPT-MECH-DT)' : 'Heavy Equipment (DEPT-MECH-HE)'}
+                </span>
+              </div>
+
               <div>
                 <label className="block text-slate-400 mb-1">Nama Lengkap Mekanik *</label>
                 <input
@@ -1163,104 +1607,372 @@ export const PosIssuePage: React.FC = () => {
         </div>
       )}
 
-      {/* Struk Sukses Modal */}
+      {/* Struk Sukses Modal (Store Issue Voucher & Wajib Cetak) */}
       {successReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="glass-panel w-full max-w-lg rounded-2xl border border-emerald-500/40 p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
+          <div className="glass-panel w-full max-w-2xl rounded-2xl border border-cyan-500/40 p-4 sm:p-6 shadow-2xl space-y-4 my-auto">
+            {/* Header Dialog */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2 text-emerald-400">
-                <CheckCircle className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-white">Transaksi Pengeluaran Berhasil</h3>
+              <div className="flex items-center gap-2 text-cyan-400">
+                <CheckCircle className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  Transaksi POS Pengeluaran Berhasil Diproses
+                </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setSuccessReceipt(null)}
-                className="text-slate-400 hover:text-white"
+                onClick={handleCloseReceiptModal}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Tutup dialog"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 font-mono text-xs space-y-2">
-              <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">No Transaksi:</span>
-                <span className="font-bold text-cyan-300">{successReceipt.transaction_number}</span>
+            {/* SOP Mandatory Notice Banner */}
+            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-300">
+                    KETENTUAN SOP: ADMIN CONTAINER WAJIB MENCETAK STRUK
+                  </p>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    Sesuai instruksi operasional, struk pengeluaran fisik wajib dicetak dan ditandatangani mekanik (digital di layar atau basah pada lembar struk) sebagai bukti serah terima sah barang.
+                  </p>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Waktu:</span>
-                <span className="text-slate-200">{successReceipt.date}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Gudang:</span>
-                <span className="text-slate-200">{successReceipt.warehouse_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Unit:</span>
-                <span className="text-slate-200">{successReceipt.unit_number} ({successReceipt.unit_name})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Mekanik:</span>
-                <span className="text-slate-200">{successReceipt.mechanic_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Pengambil:</span>
-                <span className="text-slate-200">{successReceipt.receiver_name}</span>
-              </div>
-
-              {successReceipt.has_core_return && (
-                <div className="bg-amber-500/10 border border-amber-500/30 p-2 rounded text-amber-300 text-[11px] font-sans">
-                  <span className="font-bold flex items-center gap-1">
-                    <RotateCcw className="w-3 h-3" /> Wajib Retur Part Bekas Aktif
+              <div className="shrink-0">
+                {successReceipt.has_printed ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-full">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>SUDAH DICETAK</span>
                   </span>
-                  Part bekas dicatat di pelacakan retur dengan penanggung jawab awal Mekanik ({successReceipt.mechanic_name}).
-                </div>
-              )}
-
-              {successReceipt.evidence_photo_url && (
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
-                  <span className="text-slate-400 text-[10px]">Bukti Fisik:</span>
-                  <img
-                    src={successReceipt.evidence_photo_url}
-                    alt="Bukti Pengambilan"
-                    className="w-8 h-8 object-cover rounded border border-slate-700"
-                  />
-                  <span className="text-emerald-400 text-[10px]">Tersimpan</span>
-                </div>
-              )}
-
-              {successReceipt.document_file_name && (
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span className="text-slate-400">Dokumen SPK:</span>
-                  <span className="text-cyan-300">{successReceipt.document_file_name}</span>
-                </div>
-              )}
-
-              <div className="border-t border-slate-800 pt-2 mt-2">
-                <div className="text-slate-400 mb-1">Daftar Suku Cadang:</div>
-                {successReceipt.items.map((it: any, idx: number) => (
-                  <div key={idx} className="flex justify-between text-slate-300">
-                    <span>{it.spare_part_id}</span>
-                    <span>{it.qty} {it.unit_of_measure}</span>
-                  </div>
-                ))}
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 rounded-full animate-pulse">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>BELUM DICETAK (WAJIB)</span>
+                  </span>
+                )}
               </div>
             </div>
 
+            {/* Area Printable Formal Slip Struk POS */}
+            <div
+              id="pos-receipt-print-area"
+              className="p-4 sm:p-5 rounded-xl bg-white text-slate-900 border border-slate-300 font-sans shadow-md text-xs space-y-3 print:border-none print:shadow-none print:p-0"
+            >
+              {/* Header KOP Struk */}
+              <div className="border-b-2 border-slate-900 pb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                  <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-slate-950 uppercase">
+                    PT SINERGI JAYA SENTOSA (SJS)
+                  </h1>
+                  <p className="text-[10px] text-slate-600 font-medium">
+                    Sistem Manajemen Logistik Pergudangan Kontainer Tambang (LogistikQu)
+                  </p>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
+                    BUKTI PENGELUARAN BARANG / STORE ISSUE VOUCHER (POS)
+                  </p>
+                </div>
+                <div className="text-right font-mono self-end sm:self-auto">
+                  <div className="text-[10px] text-slate-500">NO. TRANSAKSI</div>
+                  <div className="text-xs sm:text-sm font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                    {successReceipt.transaction_number}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata 2-Kolom */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Tanggal / Jam:</span>
+                  <span className="font-semibold">{successReceipt.date}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Gudang / POS:</span>
+                  <span className="font-semibold">{successReceipt.warehouse_name} ({successReceipt.warehouse_id})</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Site Tambang:</span>
+                  <span className="font-semibold">{successReceipt.site_id}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Unit Lambung:</span>
+                  <span className="font-bold text-slate-950 font-mono">{successReceipt.unit_number} ({successReceipt.unit_name})</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">HM / KM Unit:</span>
+                  <span className="font-semibold font-mono">{successReceipt.hm_km ? `${successReceipt.hm_km} HM/KM` : '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Tipe Alat:</span>
+                  <span className="font-semibold">{successReceipt.unit_type}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">No. Work Order:</span>
+                  <span className="font-semibold font-mono">{successReceipt.work_order_number || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Tipe Service:</span>
+                  <span className="font-semibold">{successReceipt.maintenance_type}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Penerima Barang:</span>
+                  <span className="font-semibold">{successReceipt.receiver_name}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 inline-block w-24">Mekanik:</span>
+                  <span className="font-bold text-slate-950">{successReceipt.mechanic_name}</span>
+                </div>
+              </div>
+
+              {/* Tabel Suku Cadang */}
+              <div>
+                <table className="w-full text-left text-[11px] border-collapse border border-slate-300">
+                  <thead>
+                    <tr className="bg-slate-200 text-slate-800 text-[10px] uppercase">
+                      <th className="border border-slate-300 px-2 py-1 text-center w-8">No</th>
+                      <th className="border border-slate-300 px-2 py-1">Part Number</th>
+                      <th className="border border-slate-300 px-2 py-1">Nama Suku Cadang</th>
+                      <th className="border border-slate-300 px-2 py-1 text-right w-16">Jumlah</th>
+                      <th className="border border-slate-300 px-2 py-1 text-center w-16">Satuan</th>
+                      <th className="border border-slate-300 px-2 py-1 text-center w-28">Ketentuan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {successReceipt.items.map((it: any, idx: number) => {
+                      const partObj = availableStock.find((p) => p.spare_part_id === it.spare_part_id);
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="border border-slate-300 px-2 py-1 text-center font-mono">{idx + 1}</td>
+                          <td className="border border-slate-300 px-2 py-1 font-mono font-bold">{it.spare_part_id}</td>
+                          <td className="border border-slate-300 px-2 py-1">{partObj?.part_name || it.part_name || '-'}</td>
+                          <td className="border border-slate-300 px-2 py-1 text-right font-mono font-bold">{it.qty}</td>
+                          <td className="border border-slate-300 px-2 py-1 text-center font-mono text-[10px]">{it.unit_of_measure}</td>
+                          <td className="border border-slate-300 px-2 py-1 text-center text-[10px]">
+                            {partObj?.requires_core_return || successReceipt.has_core_return ? (
+                              <span className="font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                                Wajib Retur Bekas
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">Reguler</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Core Return Alert box on slip */}
+              {successReceipt.has_core_return && (
+                <div className="p-2 rounded bg-amber-50 border border-amber-300 text-[10px] text-amber-900 leading-snug">
+                  <strong>PERINGATAN RETUR CORE PART:</strong> Transaksi ini mengandung suku cadang bernilai tinggi/remanufaktur. Part bekas wajib diserahkan kembali ke Gudang Kontainer maksimal 1x24 jam setelah penggantian selesai. Penanggung jawab fisik awal: <strong>Mekanik ({successReceipt.mechanic_name})</strong>.
+                </div>
+              )}
+
+              {/* Kolom Tanda Tangan Resmi */}
+              <div className="pt-3 border-t-2 border-slate-300">
+                <div className="text-[10px] font-bold text-slate-700 mb-2 uppercase text-center tracking-wider">
+                  LEMBAR PENGESAHAN & SERAH TERIMA SPARE PART
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-center text-[11px]">
+                  {/* Tanda Tangan 1: Admin Container */}
+                  <div className="border border-slate-300 rounded p-2 flex flex-col justify-between h-36 bg-slate-50/50">
+                    <div className="font-semibold text-slate-700 text-[10px]">
+                      Diserahkan Oleh:
+                      <div className="text-[9px] text-slate-500 font-normal">Admin Gudang Kontainer</div>
+                    </div>
+                    <div className="my-auto py-1">
+                      <div className="text-[9px] text-slate-400 font-mono italic">
+                        [ Terverifikasi Sistem ]
+                      </div>
+                    </div>
+                    <div className="border-t border-slate-400 pt-1">
+                      <div className="font-bold text-slate-900 truncate">
+                        ( {user?.full_name || user?.username || 'Admin Kontainer'} )
+                      </div>
+                      <div className="text-[9px] text-slate-500">Petugas Gudang</div>
+                    </div>
+                  </div>
+
+                  {/* Tanda Tangan 2: Penerima Barang */}
+                  <div className="border border-slate-300 rounded p-2 flex flex-col justify-between h-36 bg-slate-50/50">
+                    <div className="font-semibold text-slate-700 text-[10px]">
+                      Diterima Oleh:
+                      <div className="text-[9px] text-slate-500 font-normal">Pengambil Suku Cadang</div>
+                    </div>
+                    <div className="my-auto py-1">
+                      <div className="w-24 border-b border-dashed border-slate-400 mx-auto"></div>
+                    </div>
+                    <div className="border-t border-slate-400 pt-1">
+                      <div className="font-bold text-slate-900 truncate">
+                        ( {successReceipt.receiver_name} )
+                      </div>
+                      <div className="text-[9px] text-slate-500">Penerima Barang</div>
+                    </div>
+                  </div>
+
+                  {/* Tanda Tangan 3: Mekanik Penanggung Jawab */}
+                  <div className="border-2 border-slate-900 rounded p-2 flex flex-col justify-between h-36 bg-white shadow-sm">
+                    <div className="font-bold text-slate-900 text-[10px]">
+                      Mekanik Penanggung Jawab:
+                      <div className="text-[9px] text-slate-600 font-normal">
+                        {successReceipt.signature_type === 'DIGITAL' ? 'Tanda Tangan Digital Layar' : 'Tanda Tangan Basah di Struk'}
+                      </div>
+                    </div>
+
+                    <div className="my-auto py-0.5 flex flex-col items-center justify-center">
+                      {successReceipt.signature_type === 'DIGITAL' && successReceipt.mechanic_signature_url ? (
+                        <div className="flex flex-col items-center">
+                          <img
+                            src={successReceipt.mechanic_signature_url}
+                            alt="Tanda Tangan Mekanik"
+                            className="max-h-14 max-w-[140px] object-contain"
+                          />
+                          <span className="text-[8px] font-mono text-emerald-700 font-bold bg-emerald-50 px-1 rounded border border-emerald-300">
+                            ✓ VERIFIED DIGITAL SIGN
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="w-full">
+                          <div className="h-10"></div>
+                          <div className="text-[9px] text-slate-400 italic">
+                            (Bubuhkan tanda tangan basah di sini)
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-900 pt-1">
+                      <div className="font-bold text-slate-950 truncate">
+                        ( {successReceipt.mechanic_name} )
+                      </div>
+                      <div className="text-[9px] text-slate-600">
+                        {successReceipt.signature_type === 'DIGITAL' ? 'Terverifikasi Digital' : 'Tanda Tangan Basah'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Struk */}
+              <div className="pt-2 text-[9px] text-slate-500 flex justify-between items-center border-t border-slate-200">
+                <span>Dicetak otomatis melalui LogistikQu • PT Sinergi Jaya Sentosa</span>
+                <span className="font-mono">{successReceipt.transaction_number}</span>
+              </div>
+            </div>
+
+            {/* Aksi Tambahan untuk Mode Fisik: Upload Foto Struk Bertandatangan */}
+            {successReceipt.signature_type === 'PHYSICAL' && (
+              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Upload Foto Struk Fisik Bertandatangan (Arsip Digital)</span>
+                  </span>
+                  {signedReceiptPhotoUrl && (
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Foto Struk Tersimpan
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  ref={signedReceiptPhotoInputRef}
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleSignedReceiptPhotoSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => signedReceiptPhotoInputRef.current?.click()}
+                  className="w-full py-2 px-3 rounded-lg border border-dashed border-slate-700 hover:border-cyan-500 bg-slate-950 text-slate-300 text-xs flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Camera className="w-4 h-4 text-cyan-400" />
+                  <span>{signedReceiptPhotoUrl ? 'Ganti Foto Struk Bertandatangan' : 'Foto Struk Fisik yang Sudah Ditandatangani Mekanik'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Tombol Aksi Modal */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              <div className="text-xs text-slate-400 flex items-center gap-2">
+                {successReceipt.has_printed ? (
+                  <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                    <CheckCircle className="w-4 h-4" /> Struk telah dicetak & tercatat di sistem
+                  </span>
+                ) : (
+                  <span className="text-amber-400 flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4" /> Wajib cetak struk sebelum menyelesaikan transaksi
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handlePrintReceipt}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak Struk Sekarang (Wajib)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseReceiptModal}
+                  className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                    successReceipt.has_printed
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      : 'bg-slate-800/60 hover:bg-slate-700 text-slate-400'
+                  }`}
+                >
+                  Selesai & Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Warning Dialog Jika Menutup Sebelum Cetak Struk */}
+      {showUnprintedWarning && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="glass-panel w-full max-w-md rounded-2xl border border-amber-500/60 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="text-sm font-bold text-white">Peringatan SOP: Struk Belum Dicetak!</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Sesuai SOP Container Logistik SJS, <strong>Admin Kontainer WAJIB mencetak struk fisik</strong> dan memastikan mekanik membubuhkan tanda tangan sebagai bukti serah terima sah barang inventaris.
+            </p>
+            <p className="text-xs text-amber-300/90 font-medium">
+              Apakah Anda ingin kembali dan mencetak struk sekarang?
+            </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-cyan-300"
+                onClick={() => {
+                  setShowUnprintedWarning(false);
+                  setSuccessReceipt(null);
+                }}
+                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-400"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Cetak Bukti</span>
+                Tetap Keluar
               </button>
               <button
                 type="button"
-                onClick={() => setSuccessReceipt(null)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-slate-950"
+                onClick={() => {
+                  setShowUnprintedWarning(false);
+                  handlePrintReceipt();
+                }}
+                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-slate-950 flex items-center gap-1.5"
               >
-                Selesai
+                <Printer className="w-3.5 h-3.5" />
+                <span>Batal & Cetak Struk Sekarang</span>
               </button>
             </div>
           </div>

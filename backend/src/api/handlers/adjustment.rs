@@ -44,6 +44,16 @@ pub async fn list_adjustments(
     Ok(Json(list))
 }
 
+pub async fn get_adjustment(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "adjustment.view").await?;
+    let res = state.services.adjustment.get_adjustment(id).await?;
+    Ok(Json(res))
+}
+
 pub async fn approve_adjustment(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -54,6 +64,29 @@ pub async fn approve_adjustment(
         .services
         .adjustment
         .approve_adjustment(&user, id)
+        .await?;
+    Ok(Json(res))
+}
+
+#[derive(serde::Deserialize)]
+pub struct RejectAdjustmentPayload {
+    pub reason: Option<String>,
+}
+
+pub async fn reject_adjustment(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<RejectAdjustmentPayload>,
+) -> Result<Json<Value>, AppError> {
+    check_permission(&state.pool, &user, "adjustment.approve").await?;
+    let reason = payload
+        .reason
+        .unwrap_or_else(|| "Ditolak oleh Supervisor".to_string());
+    let res = state
+        .services
+        .adjustment
+        .reject_adjustment(&user, id, &reason)
         .await?;
     Ok(Json(res))
 }

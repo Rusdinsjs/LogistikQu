@@ -20,7 +20,7 @@ import type {
   Site,
   SiteReport,
   SparePart,
-  StockAdjustment,
+  StockAdjustmentEntry,
   StockMovement,
   UnitReport,
   UserProfile,
@@ -35,6 +35,9 @@ import type {
   CreateEquipmentPayload,
   CreateEmployeePayload,
   UpdateSparePartPayload,
+  MobileDevice,
+  CreateMobileDevicePayload,
+  UpdateMobileDevicePayload,
   UsedPartReturn,
   ReceiveContainerReturnPayload,
   TransferMainReturnPayload,
@@ -56,6 +59,18 @@ import type {
   EquipmentConsumptionReportItem,
   WarehousePerformanceReportItem,
   ReplenishmentEfficiencyReportItem,
+  MechanicRequest,
+  MechanicRequestItem,
+  MechanicRequestHistory,
+  MechanicRequestSummary,
+  MechanicContext,
+  CreateMechanicRequestPayload,
+  UpdateMechanicRequestPayload,
+  ApproveMechanicRequestPayload,
+  RequestRevisionPayload,
+  RejectMechanicRequestPayload,
+  CancelMechanicRequestPayload,
+  FulfillMechanicRequestPayload,
 } from './types';
 
 export const api = axios.create({
@@ -97,12 +112,12 @@ export const masterApi = {
     const res = await api.get<SparePart[]>('/master/spare-parts', { params: { search } });
     return res.data;
   },
-  getEquipment: async (search?: string) => {
-    const res = await api.get<Equipment[]>('/master/equipment', { params: { search } });
+  getEquipment: async (search?: string, category?: string) => {
+    const res = await api.get<Equipment[]>('/master/equipment', { params: { search, category } });
     return res.data;
   },
-  getEmployees: async () => {
-    const res = await api.get<Employee[]>('/master/employees');
+  getEmployees: async (category?: string) => {
+    const res = await api.get<Employee[]>('/master/employees', { params: { category } });
     return res.data;
   },
   getSites: async () => {
@@ -165,6 +180,23 @@ export const masterApi = {
     const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/warehouse-categories/${id}`);
     return res.data;
   },
+  // Master Mobile Devices
+  getDevices: async () => {
+    const res = await api.get<MobileDevice[]>('/master/devices');
+    return res.data;
+  },
+  createDevice: async (payload: CreateMobileDevicePayload) => {
+    const res = await api.post<MobileDevice>('/master/devices', payload);
+    return res.data;
+  },
+  updateDevice: async (id: string, payload: UpdateMobileDevicePayload) => {
+    const res = await api.put<MobileDevice>(`/master/devices/${encodeURIComponent(id)}`, payload);
+    return res.data;
+  },
+  deleteDevice: async (id: string) => {
+    const res = await api.delete<{ success: boolean; is_soft_deleted: boolean; message: string }>(`/master/devices/${encodeURIComponent(id)}`);
+    return res.data;
+  },
 };
 
 export const inventoryApi = {
@@ -224,6 +256,14 @@ export const issueApi = {
   },
   approveCritical: async (id: string) => {
     const res = await api.post(`/issues/${id}/approve`);
+    return res.data;
+  },
+  recordReceiptPrinted: async (id: string, signed_receipt_photo_url?: string) => {
+    const res = await api.post<{
+      success: boolean;
+      message: string;
+      receipt_printed: boolean;
+    }>(`/issues/${id}/print-receipt`, { signed_receipt_photo_url });
     return res.data;
   },
 };
@@ -293,16 +333,29 @@ export const dropApi = {
 };
 
 export const adjustmentApi = {
-  createAdjustment: async (warehouse_id: string, reason: string, items: any[], notes?: string) => {
+  createAdjustment: async (
+    warehouse_id: string,
+    reason: string,
+    items: Array<{ spare_part_id: string; qty_physical: number }>,
+    notes?: string
+  ) => {
     const res = await api.post('/adjustments', { warehouse_id, reason, items, notes });
     return res.data;
   },
   listAdjustments: async () => {
-    const res = await api.get<StockAdjustment[]>('/adjustments');
+    const res = await api.get<StockAdjustmentEntry[]>('/adjustments');
+    return res.data;
+  },
+  getAdjustmentDetail: async (id: string) => {
+    const res = await api.get<StockAdjustmentEntry>(`/adjustments/${id}`);
     return res.data;
   },
   approveAdjustment: async (id: string) => {
     const res = await api.put(`/adjustments/${id}/approve`);
+    return res.data;
+  },
+  rejectAdjustment: async (id: string, reason?: string) => {
+    const res = await api.put(`/adjustments/${id}/reject`, { reason });
     return res.data;
   },
 };
@@ -530,16 +583,115 @@ export const notificationApi = {
 };
 
 export const dashboardApi = {
-  getEnterpriseKpis: async () => {
-    const res = await api.get<EnterpriseKpiSummary>('/dashboard/enterprise-kpi');
+  getEnterpriseKpis: async (warehouse_id?: string) => {
+    const res = await api.get<EnterpriseKpiSummary>('/dashboard/enterprise-kpi', {
+      params: warehouse_id ? { warehouse_id } : undefined,
+    });
     return res.data;
   },
-  getStockVelocity: async () => {
-    const res = await api.get<FastSlowMovingPartItem[]>('/dashboard/stock-velocity');
+  getStockVelocity: async (warehouse_id?: string) => {
+    const res = await api.get<FastSlowMovingPartItem[]>('/dashboard/stock-velocity', {
+      params: warehouse_id ? { warehouse_id } : undefined,
+    });
     return res.data;
   },
-  getStockAging: async () => {
-    const res = await api.get<StockAgingSummary>('/dashboard/stock-aging');
+  getStockAging: async (warehouse_id?: string) => {
+    const res = await api.get<StockAgingSummary>('/dashboard/stock-aging', {
+      params: warehouse_id ? { warehouse_id } : undefined,
+    });
+    return res.data;
+  },
+};
+
+export const mechanicRequestApi = {
+  getContext: async () => {
+    const res = await api.get<MechanicContext>('/mechanic-requests/me/context');
+    return res.data;
+  },
+  getSummary: async (warehouse_id?: string) => {
+    const params = warehouse_id ? { warehouse_id } : {};
+    const res = await api.get<MechanicRequestSummary>('/mechanic-requests/summary', { params });
+    return res.data;
+  },
+  listRequests: async (params?: {
+    warehouse_id?: string;
+    status?: string;
+    request_type?: string;
+    search?: string;
+    mine?: boolean;
+  }) => {
+    const res = await api.get<MechanicRequest[]>('/mechanic-requests', { params });
+    return res.data;
+  },
+  getDetail: async (id: string, warehouse_id?: string) => {
+    const params = warehouse_id ? { warehouse_id } : {};
+    const res = await api.get<{
+      request: MechanicRequest;
+      items: MechanicRequestItem[];
+      history: MechanicRequestHistory[];
+    }>(`/mechanic-requests/${id}`, { params });
+    return res.data;
+  },
+  createRequest: async (payload: CreateMechanicRequestPayload, force?: boolean) => {
+    const params = force ? { force: true } : {};
+    const res = await api.post<{
+      success?: boolean;
+      duplicate_warning?: boolean;
+      id?: string;
+      request_number?: string;
+      status?: string;
+      message: string;
+      idempotent?: boolean;
+    }>('/mechanic-requests', payload, { params });
+    return res.data;
+  },
+  updateRequest: async (id: string, payload: UpdateMechanicRequestPayload) => {
+    const res = await api.put<{
+      success: boolean;
+      status: string;
+      message: string;
+    }>(`/mechanic-requests/${id}`, payload);
+    return res.data;
+  },
+  approveRequest: async (id: string, payload: ApproveMechanicRequestPayload) => {
+    const res = await api.post<{
+      success: boolean;
+      status: string;
+      message: string;
+    }>(`/mechanic-requests/${id}/approve`, payload);
+    return res.data;
+  },
+  requestRevision: async (id: string, payload: RequestRevisionPayload) => {
+    const res = await api.post<{
+      success: boolean;
+      status: string;
+      message: string;
+    }>(`/mechanic-requests/${id}/request-revision`, payload);
+    return res.data;
+  },
+  rejectRequest: async (id: string, payload: RejectMechanicRequestPayload) => {
+    const res = await api.post<{
+      success: boolean;
+      status: string;
+      message: string;
+    }>(`/mechanic-requests/${id}/reject`, payload);
+    return res.data;
+  },
+  cancelRequest: async (id: string, payload: CancelMechanicRequestPayload) => {
+    const res = await api.post<{
+      success: boolean;
+      status: string;
+      message: string;
+    }>(`/mechanic-requests/${id}/cancel`, payload);
+    return res.data;
+  },
+  fulfillRequest: async (id: string, payload: FulfillMechanicRequestPayload) => {
+    const res = await api.post<{
+      success: boolean;
+      status: string;
+      message: string;
+      issue_transaction_number?: string;
+    }>(`/mechanic-requests/${id}/fulfill`, payload);
     return res.data;
   },
 };

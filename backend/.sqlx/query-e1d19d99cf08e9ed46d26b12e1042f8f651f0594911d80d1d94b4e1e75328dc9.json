@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                r.request_number,\n                r.container_warehouse_id,\n                w.name as container_warehouse_name,\n                r.status,\n                r.created_at,\n                r.verified_at,\n                r.approved_at,\n                r.received_at,\n                CASE \n                    WHEN r.received_at IS NOT NULL \n                    THEN ROUND(EXTRACT(EPOCH FROM (r.received_at - r.created_at))::numeric / 3600, 1)\n                    ELSE NULL\n                END as lead_time_hours,\n                COUNT(ri.id)::bigint as \"items_requested!\",\n                COALESCE(SUM(ri.requested_qty), 0::numeric) as \"total_qty_requested!\",\n                COALESCE(SUM(ri.received_qty), 0::numeric) as \"total_qty_received!\",\n                CASE\n                    WHEN COALESCE(SUM(ri.requested_qty), 0) > 0\n                    THEN ROUND((COALESCE(SUM(ri.received_qty), 0) / SUM(ri.requested_qty)) * 100, 1)\n                    ELSE 100::numeric\n                END as \"fulfillment_accuracy_percent!\"\n            FROM replenishment_requests r\n            JOIN warehouses w ON r.container_warehouse_id = w.id\n            LEFT JOIN replenishment_request_items ri ON r.id = ri.request_id\n            WHERE (r.container_warehouse_id = ANY($1) OR r.main_warehouse_id = ANY($1))\n            GROUP BY r.id, r.request_number, r.container_warehouse_id, w.name, r.status, r.created_at, r.verified_at, r.approved_at, r.received_at\n            ORDER BY r.created_at DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "container_warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "container_warehouse_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "approved_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "lead_time_hours",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "items_requested!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "total_qty_requested!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "total_qty_received!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 12,
+        "name": "fulfillment_accuracy_percent!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e1d19d99cf08e9ed46d26b12e1042f8f651f0594911d80d1d94b4e1e75328dc9"
+}

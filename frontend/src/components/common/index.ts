@@ -4,3 +4,6 @@ export * from './LoadingSkeleton';
 export * from './StatCard';
 export * from './Modal';
 export * from './ErrorBoundary';
+export * from './QrCodeView';
+export * from './PhotoUploadZone';
+export * from './SignaturePad';

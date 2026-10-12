@@ -15,7 +15,7 @@ import javax.inject.Inject
 data class LoginUiState(
     val username: String = "",
     val password: String = "",
-    val serverUrl: String = "http://10.0.2.2:8090/",
+    val serverUrl: String = "https://logistik.sjsgroup.online/",
     val showServerSettings: Boolean = false,
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
@@ -46,6 +46,11 @@ class LoginViewModel @Inject constructor(
 
     fun onPasswordChange(password: String) {
         _uiState.update { it.copy(password = password, errorMessage = null) }
+    }
+
+    fun quickLogin(username: String, password: String = "password123") {
+        _uiState.update { it.copy(username = username, password = password, errorMessage = null) }
+        login()
     }
 
     fun toggleServerSettings(show: Boolean) {

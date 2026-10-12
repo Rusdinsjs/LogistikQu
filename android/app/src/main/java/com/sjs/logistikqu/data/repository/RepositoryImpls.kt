@@ -42,7 +42,8 @@ class AuthRepositoryImpl @Inject constructor(
                     username = body.user.username,
                     fullName = body.user.fullName,
                     role = body.user.effectiveRole,
-                    warehouseId = body.user.effectiveWarehouseId
+                    warehouseId = body.user.effectiveWarehouseId,
+                    permissions = body.user.effectivePermissions
                 )
                 Result.success(
                     User(
@@ -52,14 +53,25 @@ class AuthRepositoryImpl @Inject constructor(
                         role = body.user.effectiveRole,
                         warehouseId = body.user.effectiveWarehouseId,
                         token = body.token,
-                        refreshToken = body.refreshToken
+                        refreshToken = body.refreshToken,
+                        permissions = body.user.effectivePermissions
                     )
                 )
             } else {
                 Result.failure(Exception("Kredensial login tidak valid (${response.code()})"))
             }
         } catch (e: Exception) {
-            Result.failure(Exception("Gagal menghubungi server: ${e.localizedMessage}"))
+            val friendlyMsg = when (e) {
+                is java.net.UnknownHostException ->
+                    "DNS gagal menemukan host '${e.message}'. Pastikan internet aktif, aktifkan Private DNS (dns.google), atau gunakan opsi VPS Direct IP (187.77.156.109:8090)."
+                is java.net.ConnectException ->
+                    "Gagal terhubung ke host (${e.message}). Pastikan server dan port aktif."
+                is java.net.SocketTimeoutException ->
+                    "Koneksi ke server timeout (30s). Jaringan internet sedang lambat."
+                else ->
+                    "Gagal menghubungi server: ${e.localizedMessage}"
+            }
+            Result.failure(Exception(friendlyMsg))
         }
     }
 
@@ -75,7 +87,7 @@ class AuthRepositoryImpl @Inject constructor(
             preferencesManager.warehouseIdFlow
         ) { f, ro, w -> Triple(f, ro, w) }
 
-        return combine(flow1, flow2) { a, b ->
+        return combine(flow1, flow2, preferencesManager.permissionsFlow) { a, b, perms ->
             val token = a.first
             val refresh = a.second
             val username = a.third
@@ -91,7 +103,8 @@ class AuthRepositoryImpl @Inject constructor(
                     role = role,
                     warehouseId = whId,
                     token = token,
-                    refreshToken = refresh ?: ""
+                    refreshToken = refresh ?: "",
+                    permissions = perms
                 )
             } else {
                 null
@@ -227,7 +240,11 @@ class IssueRepositoryImpl @Inject constructor(
             priority = issue.priority,
             items = listOf(IssueItemDto(issue.sparePartId, issue.qty)),
             latitude = issue.latitude,
-            longitude = issue.longitude
+            longitude = issue.longitude,
+            signatureType = issue.signatureType,
+            mechanicSignatureUrl = issue.mechanicSignatureUrl,
+            receiptPrinted = issue.receiptPrinted,
+            signedReceiptPhotoUrl = issue.signedReceiptPhotoUrl
         )
         val payloadJson = Gson().toJson(requestDto)
         val queueId = UUID.randomUUID().toString()
@@ -289,7 +306,11 @@ class IssueRepositoryImpl @Inject constructor(
                         evidencePhotoPath = null,
                         latitude = dto.latitude,
                         longitude = dto.longitude,
-                        timestamp = it.created_at
+                        timestamp = it.created_at,
+                        signatureType = dto.signatureType ?: "DIGITAL",
+                        mechanicSignatureUrl = dto.mechanicSignatureUrl,
+                        receiptPrinted = dto.receiptPrinted ?: true,
+                        signedReceiptPhotoUrl = dto.signedReceiptPhotoUrl
                     )
                 } catch (e: Exception) {
                     null
@@ -310,7 +331,17 @@ class ReceiveRepositoryImpl @Inject constructor(
         val payloadJson = Gson().toJson(receipt)
         val queueId = UUID.randomUUID().toString()
 
-        // 1. Local Queue
+        // 1. Immediately increment local physical inventory cache if item and qty provided
+        if (!receipt.sparePartId.isNullOrBlank() && receipt.receivedQty != null && receipt.receivedQty > 0) {
+            inventoryCacheDao.incrementStockLocal(receipt.containerWarehouseId, receipt.sparePartId, receipt.receivedQty)
+        }
+
+        // 2. Put-Away Guided: update local bin location if specified
+        if (!receipt.sparePartId.isNullOrBlank() && !receipt.targetBinCode.isNullOrBlank()) {
+            inventoryCacheDao.updateBinLocationLocal(receipt.containerWarehouseId, receipt.sparePartId, receipt.targetBinCode)
+        }
+
+        // 3. Local Queue
         syncQueueDao.insert(
             SyncQueueEntity(
                 id = queueId,
@@ -320,7 +351,7 @@ class ReceiveRepositoryImpl @Inject constructor(
             )
         )
 
-        // 2. Local History
+        // 4. Local History
         localTransactionDao.insert(
             LocalTransactionEntity(
                 id = UUID.randomUUID().toString(),
@@ -338,6 +369,185 @@ class ReceiveRepositoryImpl @Inject constructor(
         return Result.success(emptyList())
     }
 }
+
+@Singleton
+class ReplenishmentRepositoryImpl @Inject constructor(
+    private val apiService: LogistikQuApiService,
+    private val inventoryCacheDao: InventoryCacheDao,
+    private val syncQueueDao: SyncQueueDao,
+    private val localTransactionDao: LocalTransactionDao
+) : ReplenishmentRepository {
+
+    override suspend fun getRecommendations(warehouseId: String): Result<List<ReplenishmentRecommendation>> {
+        return try {
+            val response = apiService.getReplenishmentRecommendations(warehouseId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.map { it.toDomain() })
+            } else {
+                fallbackLocalRecommendations(warehouseId)
+            }
+        } catch (e: Exception) {
+            fallbackLocalRecommendations(warehouseId)
+        }
+    }
+
+    private suspend fun fallbackLocalRecommendations(warehouseId: String): Result<List<ReplenishmentRecommendation>> {
+        val items = inventoryCacheDao.getAllStockByWarehouse(warehouseId)
+        val recs = items.filter { it.quantity <= it.minimum_stock }.map { stock ->
+            val leadTime = 3
+            val dailyUsage = 2.0
+            val safetyStock = stock.minimum_stock
+            val rop = (dailyUsage * leadTime) + safetyStock
+            val maxStock = stock.minimum_stock * 3
+            val orderQty = (maxStock - stock.quantity).coerceAtLeast(1.0)
+            ReplenishmentRecommendation(
+                sparePartId = stock.part_number,
+                partName = stock.part_name,
+                unitOfMeasure = "PCS",
+                currentStock = stock.quantity,
+                minStock = stock.minimum_stock,
+                maxStock = maxStock,
+                safetyStock = safetyStock,
+                leadTimeDays = leadTime,
+                avgDailyUsage = dailyUsage,
+                recommendedOrderQty = orderQty,
+                reorderPoint = rop,
+                consumptionTrend = "STABLE"
+            )
+        }
+        return Result.success(recs)
+    }
+
+    override suspend fun submitReplenishmentRequest(
+        containerWarehouseId: String,
+        items: List<ReplenishmentDraftItem>,
+        notes: String?
+    ): Result<String> {
+        val queueId = UUID.randomUUID().toString()
+        val dto = CreateReplenishmentRequestDto(
+            containerWarehouseId = containerWarehouseId,
+            notes = notes,
+            items = items.map {
+                CreateReplenishmentItemDto(
+                    sparePartId = it.sparePartId,
+                    requestedQty = it.requestedQty,
+                    recommendedQty = it.recommendedQty,
+                    notes = it.notes.ifBlank { null }
+                )
+            }
+        )
+        val payloadJson = Gson().toJson(dto)
+
+        // 1. Try sending directly to API if online
+        try {
+            val response = apiService.createReplenishmentRequest(dto)
+            if (response.isSuccessful) {
+                return Result.success("REQ-ONLINE-${queueId.take(6).uppercase()}")
+            }
+        } catch (_: Exception) {
+            // Fallback to offline queue
+        }
+
+        // 2. Offline Queue
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = queueId,
+                transaction_type = "REPLENISHMENT",
+                payload = payloadJson,
+                status = "PENDING"
+            )
+        )
+
+        localTransactionDao.insert(
+            LocalTransactionEntity(
+                id = UUID.randomUUID().toString(),
+                transaction_id = queueId,
+                type = "REPLENISHMENT",
+                data = payloadJson,
+                sync_status = "PENDING"
+            )
+        )
+
+        return Result.success("REQ-OFFLINE-${queueId.take(6).uppercase()}")
+    }
+
+    override suspend fun getWarehouseBins(warehouseId: String): Result<List<WarehouseBin>> {
+        return try {
+            val response = apiService.getWarehouseBins(warehouseId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.map { it.toDomain() })
+            } else {
+                fallbackLocalBins(warehouseId)
+            }
+        } catch (e: Exception) {
+            fallbackLocalBins(warehouseId)
+        }
+    }
+
+    private suspend fun fallbackLocalBins(warehouseId: String): Result<List<WarehouseBin>> {
+        val distinctBins = inventoryCacheDao.getDistinctBins(warehouseId)
+        val defaultBins = if (distinctBins.isNotEmpty()) {
+            distinctBins.mapIndexed { idx, binCode ->
+                WarehouseBin(
+                    id = "bin-local-$idx",
+                    warehouseId = warehouseId,
+                    binCode = binCode,
+                    zone = binCode.take(1).ifEmpty { "A" },
+                    shelfLevel = "1",
+                    capacityParts = 50,
+                    currentItemsCount = 1L,
+                    totalQty = 10.0,
+                    description = "Rak Penyimpanan Kontainer $binCode"
+                )
+            }
+        } else {
+            listOf("BIN-A1-01", "BIN-A1-02", "BIN-A2-01", "BIN-B1-01", "BIN-B1-02", "BIN-C1-01").mapIndexed { idx, code ->
+                WarehouseBin(
+                    id = "bin-default-$idx",
+                    warehouseId = warehouseId,
+                    binCode = code,
+                    zone = code.split("-").getOrNull(1)?.take(1) ?: "A",
+                    shelfLevel = "1",
+                    capacityParts = 100,
+                    currentItemsCount = 0L,
+                    totalQty = 0.0,
+                    description = "Rak Standar Kontainer $code"
+                )
+            }
+        }
+        return Result.success(defaultBins)
+    }
+
+    override suspend fun relocateStockBin(
+        warehouseId: String,
+        sparePartId: String,
+        targetBinCode: String
+    ): Result<Unit> {
+        inventoryCacheDao.updateBinLocationLocal(warehouseId, sparePartId, targetBinCode)
+        try {
+            apiService.relocateStockBin(
+                warehouseId,
+                RelocateStockBinRequestDto(sparePartId = sparePartId, targetBinCode = targetBinCode)
+            )
+        } catch (_: Exception) {
+            val payload = mapOf(
+                "warehouse_id" to warehouseId,
+                "spare_part_id" to sparePartId,
+                "target_bin_code" to targetBinCode
+            )
+            syncQueueDao.insert(
+                SyncQueueEntity(
+                    id = UUID.randomUUID().toString(),
+                    transaction_type = "ADJUSTMENT",
+                    payload = Gson().toJson(payload),
+                    status = "PENDING"
+                )
+            )
+        }
+        return Result.success(Unit)
+    }
+}
+
 
 @Singleton
 class TransferRepositoryImpl @Inject constructor(

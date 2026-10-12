@@ -42,9 +42,9 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
     setLoading(true);
     try {
       const [kpiData, velocityData, agingData] = await Promise.all([
-        dashboardApi.getEnterpriseKpis(),
-        dashboardApi.getStockVelocity(),
-        dashboardApi.getStockAging(),
+        dashboardApi.getEnterpriseKpis(warehouseId),
+        dashboardApi.getStockVelocity(warehouseId),
+        dashboardApi.getStockAging(warehouseId),
       ]);
       setKpi(kpiData);
       setVelocityItems(velocityData);
@@ -108,7 +108,7 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
             <span>Enterprise Warehouse Performance Metrics</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Konsolidasi valuasi persediaan, perputaran barang, dan mitigasi risiko logistik tambang.
+            Konsolidasi valuasi persediaan, perputaran barang, dan mitigasi risiko logistik.
           </p>
         </div>
         <button

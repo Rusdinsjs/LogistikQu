@@ -13,6 +13,7 @@ import {
   Users,
   RotateCcw,
   Layers,
+  Wrench,
   ChevronLeft,
   ChevronRight,
   PanelLeftClose,
@@ -24,6 +25,7 @@ export type TabId =
   | 'dashboard'
   | 'inventory'
   | 'bins'
+  | 'mechanic-requests'
   | 'pos'
   | 'returns'
   | 'replenishment'
@@ -45,6 +47,17 @@ export const ALL_MENU_ITEMS: MenuItemConfig[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, requiredPermissions: [] },
   { id: 'inventory', label: 'Monitoring Stok', icon: Boxes, requiredPermissions: ['inventory.view'] },
   { id: 'bins', label: 'Layout & Denah Bin Rak', icon: Layers, requiredPermissions: ['bins.view', 'inventory.view'] },
+  {
+    id: 'mechanic-requests',
+    label: 'Permohonan Mekanik',
+    icon: Wrench,
+    requiredPermissions: [
+      'mechanic_request.view',
+      'mechanic_request.create',
+      'mechanic_request.approve',
+      'mechanic_request.fulfill',
+    ],
+  },
   { id: 'pos', label: 'POS Issue Spare Part', icon: ShoppingCart, requiredPermissions: ['issue.create', 'issue.approve', 'issue.view'] },
   { id: 'returns', label: 'Retur Part Bekas', icon: RotateCcw, requiredPermissions: ['returns.view', 'returns.receive', 'returns.transfer', 'returns.complete'] },
   { id: 'replenishment', label: 'Alur Permohonan Stok', icon: GitPullRequest, requiredPermissions: ['request.view', 'request.create', 'request.verify', 'request.approve', 'sto.receive'] },
@@ -57,7 +70,41 @@ export const ALL_MENU_ITEMS: MenuItemConfig[] = [
 ];
 
 export const isTabAccessible = (tabId: TabId, permissions: string[] = [], roleId?: string): boolean => {
-  if (roleId === 'SUPER_ADMIN') return true;
+  const normRole = (roleId || '').toUpperCase();
+  if (normRole === 'SUPER_ADMIN') return true;
+
+  // 1. Mekanik Lapangan: Permohonan Mekanik, Monitoring Stok, dan Tanggungan Core Retur Part Bekas
+  if (normRole === 'MECHANIC') {
+    return tabId === 'mechanic-requests' || tabId === 'inventory' || tabId === 'returns';
+  }
+
+  // 2. Admin Kontainer: dilarang keras mengakses Permohonan Mekanik (#2), Drop Gudang Utama, dan Master Data & Unit
+  if (normRole.includes('CONTAINER_ADMIN') || normRole.includes('ADMIN_CONT')) {
+    if (tabId === 'mechanic-requests' || tabId === 'drops' || tabId === 'master') {
+      return false;
+    }
+  }
+
+  // 3. Admin Gudang Utama: dilarang mengakses POS Issue Loket, Permohonan Mekanik, Stock Opname, dan Master Data & Unit
+  if (normRole.includes('MAIN_ADMIN') || normRole.includes('ADMIN_MAIN')) {
+    if (tabId === 'pos' || tabId === 'mechanic-requests' || tabId === 'adjustment' || tabId === 'master') {
+      return false;
+    }
+  }
+
+  // 4. Supervisor: tidak memiliki akses manajemen pengguna teknis, Master Data & Unit, Layout & Denah Bin Rak, Permohonan Mekanik, dan POS Issue
+  if (normRole.includes('SUPERVISOR')) {
+    if (
+      tabId === 'users' ||
+      tabId === 'master' ||
+      tabId === 'bins' ||
+      tabId === 'mechanic-requests' ||
+      tabId === 'pos'
+    ) {
+      return false;
+    }
+  }
+
   const menu = ALL_MENU_ITEMS.find((m) => m.id === tabId);
   if (!menu) return false;
   if (menu.requiredPermissions.length === 0) return true;
@@ -182,6 +229,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {accessibleMenuItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
+            const displayLabel =
+              user?.role_id === 'MECHANIC' && item.id === 'returns'
+                ? 'Tanggungan Core Retur'
+                : item.label;
             return (
               <button
                 key={item.id}
@@ -189,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onSelectTab(item.id);
                   if (onCloseMobile) onCloseMobile();
                 }}
-                title={item.label}
+                title={displayLabel}
                 className={`w-full flex items-center rounded-lg text-xs font-medium transition-all group relative cursor-pointer ${
                   isMini
                     ? 'justify-center py-2.5 px-0'
@@ -207,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 
                 {!isMini && (
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{displayLabel}</span>
                 )}
 
                 {/* Floating Tooltip in Mini Mode */}

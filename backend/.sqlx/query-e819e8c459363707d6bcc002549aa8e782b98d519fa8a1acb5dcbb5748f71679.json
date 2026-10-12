@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.mechanic_name,\n                COUNT(DISTINCT t.id)::bigint as total_jobs,\n                COALESCE(SUM(i.qty), 0) as total_qty\n            FROM issue_transactions t\n            JOIN issue_transaction_items i ON t.id = i.transaction_id\n            WHERE t.status = 'COMPLETED'\n              AND t.warehouse_id = ANY($1)\n            GROUP BY t.mechanic_name\n            ORDER BY total_qty DESC\n            LIMIT 50\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mechanic_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_jobs",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_qty",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "e819e8c459363707d6bcc002549aa8e782b98d519fa8a1acb5dcbb5748f71679"
+}

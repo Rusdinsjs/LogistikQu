@@ -29,7 +29,39 @@ Dokumen ini ditujukan sebagai **panduan transfer konteks** bagi asisten AI Antig
 3. **State Machine Replenishment**:
    - `REQUESTED` $\rightarrow$ `VERIFIED` (oleh Admin Utama) $\rightarrow$ `APPROVED` (oleh Supervisor) $\rightarrow$ `IN_TRANSIT` (Dokumen Drop STO terbit) $\rightarrow$ `COMPLETED` (Diterima Admin Kontainer, saldo fisik kontainer bertambah).
    - Jika ditolak Supervisor: status menjadi `RETURNED_TO_MAIN_ADMIN`. Admin Utama dapat merevisi/mengajukan ulang (`VERIFIED`) atau mengembalikan ke kontainer (`RETURNED_TO_CONTAINER_ADMIN`).
-4. **Target VPS**:
+4. **Fitur Permohonan Stok Mekanik (Mechanic Stock Requests)**:
+   - Mekanik memiliki akun sendiri (`role = 'MECHANIC'`) terhubung ke `employees` melalui `users.employee_id`.
+   - Mekanik dapat mengajukan penggantian (`REPLACEMENT`) dan pengembalian (`RETURN`) suku cadang via Web dan Android.
+   - Sesuai kebijakan RBAC terbaru: **Admin Kontainer diblokir dari menu & endpoint permohonan mekanik** agar pemisahan tugas (*separation of duties*) terjaga.
+   - Alur persetujuan diproses oleh **Supervisor** (`SUPERVISOR` / `SUPERVISOR_HE` / `SUPERVISOR_DT`): `SUBMITTED` $\rightarrow$ `APPROVED` $\rightarrow$ `COMPLETED`. Dilengkapi alur revisi (`REVISION_REQUESTED`), tolak (`REJECTED`), dan pembatalan (`CANCELLED`).
+   - Dokumen permohonan: `MRQ-...`.
+   - Pada pemenuhan (`fulfill`) tipe `REPLACEMENT`: otomatis menerbitkan transaksi POS loket `issue_transactions` (`ISS-...`), memotong saldo fisik `inventory_stock`, mencatat `stock_movements`, dan menerbitkan tanggungan core retur `used_part_returns` (`RET-...`).
+   - Pada pemenuhan (`fulfill`) tipe `RETURN`: menambah saldo fisik `inventory_stock` dan mencatat `stock_movements` (`ADJUSTMENT_IN`).
+5. **Fitur Quick-Add Data Master Unit & Mekanik (On-the-Fly)**:
+   - **Admin Kontainer**: dapat mendaftarkan Unit Equipment baru (`POST /api/v1/master/equipment`) dan Mekanik baru (`POST /api/v1/master/employees`) secara langsung dari popup POS Loket jika nomor lambung atau mekanik belum terdaftar, tanpa membuka menu Master Data global (`master.manage`).
+   - **Mekanik**: dapat mendaftarkan Unit Equipment baru (`POST /api/v1/master/equipment`) secara langsung dari dialog form permohonan jika nomor lambung belum ada di database, tanpa dapat menambah mekanik/karyawan (`403 Forbidden`).
+   - Di Android, dialog Quick-Add bekerja dengan fallback offline lokal jika jaringan pit terputus.
+6. **Matriks Hak Akses & Menu Sidebar/Dashboard Terisolasi**:
+   - Web Sidebar dan Android Dashboard memfilter menu secara ketat per peran:
+     - **Mekanik**: Hanya Permohonan Stok Mekanik & Cek Katalog Stok.
+     - **Admin Kontainer**: POS Loket, Pengembalian Part, Pengajuan Reorder/Penerimaan STO, Stock Opname, Multi-Gudang Bins, Laporan Kontainer (diblokir dari Permohonan Mekanik, Drop STO Pengiriman, dan Master Data & Unit).
+     - **Admin Utama**: Verifikasi Reorder, Pengiriman Drop STO, Kelola Pengguna, Laporan Logistik (diblokir dari POS Issue, Permohonan Mekanik, Stock Opname fisik, dan Master Data & Unit).
+     - **Supervisor**: Approval Reorder, Approval Stock Opname, Retur Part Bekas, Monitoring Multi-Gudang, Laporan Logistik (diblokir dari Layout & Denah Bin Rak, Permohonan Mekanik, POS Issue Loket, Master Data & Unit, dan Kelola Pengguna).
+7. **Fitur Multi-Item Stock Opname (Penyesuaian Fisik Batch)**:
+   - Pengajuan Stock Opname dilakukan secara **batch / multi-item dalam 1 paket dokumen** (`ADJ-...`).
+   - Admin Kontainer dapat memanfaatkan tombol *"⚡ Muat Semua Stok Gudang"* untuk menarik seluruh suku cadang aktif secara otomatis atau menambah suku cadang pilihan secara manual.
+   - Perhitungan variance (selisih = fisik - sistem), rasio akurasi stok (IRA %), dan badge visual (Cocok / Surplus / Shortage) dihitung otomatis realtime.
+   - Supervisor dapat memeriksa seluruh rincian item, memfilter hanya item yang berselisih, lalu melakukan **Setujui (Approve)** atau **Tolak (Reject)** secara kolektif per dokumen.
+   - Saat disetujui: saldo `inventory_stock` diperbarui dan `stock_movements` dicatat untuk setiap baris barang yang berselisih.
+8. **Kewajiban Cetak Struk & Tanda Tangan Mekanik (BR-005 Mandatory Receipt & Signature)**:
+   - Setiap transaksi pengeluaran loket POS di Gudang Kontainer wajib memiliki tanda tangan sah dari mekanik penanggung jawab.
+   - Pilihan tanda tangan:
+     1. **Digital di Layar**: mekanik membubuhkan tanda tangan langsung di canvas touchscreen/HP (`signature_type = 'DIGITAL'`).
+     2. **Fisik di Struk**: Admin mencetak struk fisik lalu mekanik menandatangani secara basah di struk (`signature_type = 'PHYSICAL'`).
+   - Struk pengeluaran (*Store Issue Voucher*) **wajib dicetak** oleh Admin Kontainer. Sistem memblokir penutupan dialog sebelum struk dicetak atau meminta konfirmasi ketat, dan mencatat status `receipt_printed = true` serta `receipt_printed_at` di server via endpoint `POST /api/v1/issues/{id}/print-receipt`.
+   - Struk fisik memuat KOP resmi PT SJS, identitas unit/HM/KM/WO, rincian suku cadang, peringatan core return (BR-004), dan 3 kolom otorisasi (Admin Kontainer, Pengambil/Penerima, Mekanik).
+   - Di aplikasi mobile Android, struk dapat dicetak via printer sabuk thermal Bluetooth (ESC/POS) maupun sistem print preview standar Android.
+9. **Target VPS**:
    - Host: `187.77.156.109`
    - User: `root`
    - Nginx Gateway VPS melayani domain `logistik.sjsgroup.online` via reverse proxy ke port internal host `172.18.0.1:8090`.
@@ -45,6 +77,8 @@ Dokumen ini ditujukan sebagai **panduan transfer konteks** bagi asisten AI Antig
 - `admin_main_dt` : Admin Gudang Utama DT (`WH-MAIN-DT`)
 - `admin_cont_he` : Admin Kontainer Heavy Equipment (`WH-CONT-HE`)
 - `admin_cont_dt` : Admin Kontainer Dump Truck (`WH-CONT-DT`)
+- `mekanik_he`    : Mekanik Alat Berat (`EMP-101`, `WH-CONT-HE`)
+- `mekanik_dt`    : Mekanik Dump Truck (`EMP-103`, `WH-CONT-DT`)
 
 ---
 
@@ -73,10 +107,13 @@ pnpm install
 pnpm dev
 ```
 
-### Menjalankan Smoke Test & E2E Test:
+### Menjalankan Smoke Test, E2E Test, Mechanic Flow, Opname Flow & POS Signature Test:
 ```bash
 bash test_smoke.sh
 bash test_e2e_flow.sh
+bash test_mechanic_flow.sh
+bash test_opname_flow.sh
+bash test_pos_signature_and_receipt.sh
 ```
 
 ### Deploy ke VPS:

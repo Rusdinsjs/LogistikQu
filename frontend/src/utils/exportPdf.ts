@@ -130,7 +130,7 @@ export function printOrExportPdf(options: PrintReportOptions) {
     <div class="signature-box">
       <div class="signature-space"></div>
       <strong>Disetujui Oleh</strong><br>
-      <span>Superintendent Logistik Tambang</span>
+      <span>Superintendent Logistik</span>
     </div>
   </div>
 

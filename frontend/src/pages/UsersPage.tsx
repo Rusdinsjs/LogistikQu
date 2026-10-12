@@ -63,11 +63,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   },
   {
     category: 'MASTER',
-    title: 'Master Data & Unit Tambang',
+    title: 'Master Data & Unit',
     icon: Database,
     color: 'indigo',
     items: [
-      { id: 'master.view', label: 'Monitoring Master Data & Unit (Menu)', desc: 'Melihat katalog suku cadang, unit tambang, mekanik, site, dan gudang' },
+      { id: 'master.view', label: 'Monitoring Master Data & Unit (Menu)', desc: 'Melihat katalog suku cadang, unit, mekanik, site, dan gudang' },
       { id: 'master.manage', label: 'Kelola Master Data (CRUD Penuh)', desc: 'Menambah, mengubah, dan menonaktifkan master data sistem' },
     ],
   },

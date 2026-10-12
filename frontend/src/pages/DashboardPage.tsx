@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { inventoryApi } from '../api';
 import type { InventoryStockItem } from '../types';
-import type { TabId } from '../components/Sidebar';
+import { isTabAccessible, type TabId } from '../components/Sidebar';
 import { EnterpriseDashboard } from '../features/dashboard/EnterpriseDashboard';
 import { Badge } from '../components/common/Badge';
 import {
@@ -16,7 +16,7 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
-  const { activeWarehouse, activeWarehouseInfo } = useAuth();
+  const { user, activeWarehouse, activeWarehouseInfo } = useAuth();
   const [criticalItems, setCriticalItems] = useState<InventoryStockItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -52,30 +52,36 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
             Sistem pengawasan persediaan kontainer terdistribusi, kontrol mutasi suku cadang harian,
-            serta tata kelola suplai pasokan untuk mendukung armada tambang.
+            serta tata kelola suplai pasokan untuk mendukung armada.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => onNavigate('pos')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
-          >
-            <span>Input POS Issue</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onNavigate('returns')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow-sm shadow-amber-500/10 cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Retur Part Bekas</span>
-          </button>
-          <button
-            onClick={() => onNavigate('replenishment')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition-all cursor-pointer"
-          >
-            <span>Pengajuan Replenishment</span>
-          </button>
+          {isTabAccessible('pos', user?.permissions, user?.role_id) && (
+            <button
+              onClick={() => onNavigate('pos')}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs shadow-lg shadow-cyan-500/20 transition-all cursor-pointer"
+            >
+              <span>Input POS Issue</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {isTabAccessible('returns', user?.permissions, user?.role_id) && (
+            <button
+              onClick={() => onNavigate('returns')}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 font-semibold text-xs transition-all shadow-sm shadow-amber-500/10 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Retur Part Bekas</span>
+            </button>
+          )}
+          {isTabAccessible('replenishment', user?.permissions, user?.role_id) && (
+            <button
+              onClick={() => onNavigate('replenishment')}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition-all cursor-pointer"
+            >
+              <span>Pengajuan Replenishment</span>
+            </button>
+          )}
         </div>
       </div>
 

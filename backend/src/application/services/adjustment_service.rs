@@ -222,4 +222,81 @@ impl AdjustmentService {
             "message": format!("Penyesuaian stok {} disetujui, saldo fisik diselaraskan", adj.adjustment_number)
         }))
     }
+
+    pub async fn get_adjustment(&self, id: Uuid) -> Result<Value, AppError> {
+        let header = self
+            .adjustment_repo
+            .get_adjustment_by_id(id)
+            .await?
+            .ok_or_else(|| {
+                AppError::NotFound("Pengajuan penyesuaian tidak ditemukan".to_string())
+            })?;
+        let items = self.adjustment_repo.get_adjustment_items(id).await?;
+        Ok(json!({
+            "adjustment": header,
+            "items": items
+        }))
+    }
+
+    pub async fn reject_adjustment(
+        &self,
+        claims: &Claims,
+        id: Uuid,
+        reason: &str,
+    ) -> Result<Value, AppError> {
+        let mut tx = self.pool.begin().await?;
+
+        let adj = sqlx::query!(
+            r#"
+            SELECT id, adjustment_number, warehouse_id, status
+            FROM stock_adjustments
+            WHERE id = $1 FOR UPDATE
+            "#,
+            id
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Pengajuan penyesuaian tidak ditemukan".to_string()))?;
+
+        if adj.status != "PENDING_APPROVAL" {
+            return Err(AppError::BadRequest(
+                "Pengajuan penyesuaian bukan berstatus PENDING_APPROVAL".to_string(),
+            ));
+        }
+
+        let reject_note = format!("Catatan Penolakan Supervisor: {}", reason);
+
+        sqlx::query(
+            r#"
+            UPDATE stock_adjustments
+            SET status = 'REJECTED', approved_by = $1, approved_at = NOW(),
+                notes = CASE WHEN notes IS NULL OR notes = '' THEN $2 ELSE notes || E'\n' || $2 END
+            WHERE id = $3
+            "#,
+        )
+        .bind(claims.sub)
+        .bind(&reject_note)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        let _ = self
+            .audit_repo
+            .record_log(
+                Some(claims.sub),
+                Some(&claims.username),
+                "REJECT_ADJUSTMENT",
+                "STOCK_ADJUSTMENT",
+                Some(&adj.adjustment_number),
+                Some(json!({ "warehouse_id": adj.warehouse_id, "reject_reason": reason })),
+            )
+            .await;
+
+        Ok(json!({
+            "success": true,
+            "message": format!("Pengajuan stock opname {} telah ditolak", adj.adjustment_number)
+        }))
+    }
 }

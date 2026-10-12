@@ -1,5 +1,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import {
+  isDumpTruckEquipment,
+  isHeavyEquipment,
+  isDumpTruckMechanic,
+  isHeavyEquipmentMechanic,
+  getWarehouseCategory,
+  filterEquipmentByCategory,
+  filterMechanicsByCategory,
+} from '../utils/fleetCategory.ts';
 
 describe('Frontend Component & Utility Tests', () => {
   describe('Formatters & Badge Utilities', () => {
@@ -79,10 +88,33 @@ describe('Frontend Component & Utility Tests', () => {
 
   describe('Sidebar Navigation & Toggle State Machine', () => {
     function isTabAccessibleMock(tabId: string, permissions: string[] = [], roleId?: string): boolean {
-      if (roleId === 'SUPER_ADMIN') return true;
+      const normRole = (roleId || '').toUpperCase();
+      if (normRole === 'SUPER_ADMIN') return true;
+      if (normRole === 'MECHANIC') {
+        return tabId === 'mechanic-requests' || tabId === 'inventory' || tabId === 'returns';
+      }
+      if (normRole.includes('CONTAINER_ADMIN') || normRole.includes('ADMIN_CONT')) {
+        if (tabId === 'mechanic-requests' || tabId === 'drops' || tabId === 'master') return false;
+      }
+      if (normRole.includes('MAIN_ADMIN') || normRole.includes('ADMIN_MAIN')) {
+        if (tabId === 'pos' || tabId === 'mechanic-requests' || tabId === 'adjustment' || tabId === 'master') return false;
+      }
+      if (normRole.includes('SUPERVISOR')) {
+        if (
+          tabId === 'users' ||
+          tabId === 'master' ||
+          tabId === 'bins' ||
+          tabId === 'mechanic-requests' ||
+          tabId === 'pos'
+        ) return false;
+      }
       if (tabId === 'dashboard') return true;
       if (tabId === 'inventory') return permissions.includes('inventory.view');
+      if (tabId === 'bins') return permissions.includes('bins.view') || permissions.includes('inventory.view');
+      if (tabId === 'mechanic-requests') return permissions.includes('mechanic_request.approve') || permissions.includes('mechanic_request.create');
+      if (tabId === 'pos') return permissions.includes('issue.create') || permissions.includes('issue.approve');
       if (tabId === 'users') return permissions.includes('users.manage');
+      if (tabId === 'master') return permissions.includes('master.view') || permissions.includes('master.manage');
       return false;
     }
 
@@ -100,6 +132,44 @@ describe('Frontend Component & Utility Tests', () => {
       assert.strictEqual(isTabAccessibleMock('users', ['inventory.view']), false);
       assert.strictEqual(isTabAccessibleMock('users', ['users.manage']), true);
       assert.strictEqual(isTabAccessibleMock('users', [], 'SUPER_ADMIN'), true);
+    });
+
+    test('Master Data & Unit tab is hidden from Container Admin, Main Admin, and Supervisor', () => {
+      // Allowed for Superadmin & Manager
+      assert.strictEqual(isTabAccessibleMock('master', [], 'SUPER_ADMIN'), true);
+      assert.strictEqual(isTabAccessibleMock('master', ['master.manage', 'master.view'], 'MANAGER'), true);
+
+      // Blocked for Container Admin
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'CONTAINER_ADMIN_HE'), false);
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'CONTAINER_ADMIN_DT'), false);
+
+      // Blocked for Main Admin
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'MAIN_ADMIN_HE'), false);
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'MAIN_ADMIN_DT'), false);
+
+      // Blocked for Supervisor
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'SUPERVISOR'), false);
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'SUPERVISOR_HE'), false);
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'SUPERVISOR_DT'), false);
+
+      // Blocked for Mechanic
+      assert.strictEqual(isTabAccessibleMock('master', ['master.view'], 'MECHANIC'), false);
+    });
+
+    test('Layout & Denah, Permohonan Mekanik, and POS tabs are hidden from Supervisor', () => {
+      const spvRoles = ['SUPERVISOR', 'SUPERVISOR_HE', 'SUPERVISOR_DT'];
+      for (const role of spvRoles) {
+        assert.strictEqual(isTabAccessibleMock('bins', ['bins.view', 'inventory.view'], role), false);
+        assert.strictEqual(isTabAccessibleMock('mechanic-requests', ['mechanic_request.approve'], role), false);
+        assert.strictEqual(isTabAccessibleMock('pos', ['issue.create', 'issue.approve'], role), false);
+      }
+      // But accessible for roles that have permission
+      assert.strictEqual(isTabAccessibleMock('bins', ['bins.view'], 'CONTAINER_ADMIN_HE'), true);
+      assert.strictEqual(isTabAccessibleMock('pos', ['issue.create'], 'CONTAINER_ADMIN_HE'), true);
+      assert.strictEqual(isTabAccessibleMock('mechanic-requests', ['mechanic_request.create'], 'MECHANIC'), true);
+      assert.strictEqual(isTabAccessibleMock('bins', [], 'SUPER_ADMIN'), true);
+      assert.strictEqual(isTabAccessibleMock('mechanic-requests', [], 'SUPER_ADMIN'), true);
+      assert.strictEqual(isTabAccessibleMock('pos', [], 'SUPER_ADMIN'), true);
     });
 
     test('Sidebar toggle state transitions correctly between expanded and collapsed', () => {
@@ -194,6 +264,83 @@ describe('Frontend Component & Utility Tests', () => {
       manager.setTheme('dark');
       assert.strictEqual(manager.getTheme(), 'dark');
       assert.strictEqual(manager.getStoredTheme(), 'dark');
+    });
+  });
+
+  describe('POS Issue Unit & Mechanic Fleet Filtering (HE vs DT)', () => {
+    const mockEquipments = [
+      { id: 'DT-001', unit_number: 'DT-001', name: 'Dump Truck HD785 #001', equipment_type_id: 'HD785', current_hm_km: 12000, is_active: true },
+      { id: 'DT-044', unit_number: 'DT-044', name: 'Dump Truck CAT 777 #044', equipment_type_id: 'CAT777', current_hm_km: 15000, is_active: true },
+      { id: 'DT-821', unit_number: 'DT-821', name: 'Hino 500 Ti FM', equipment_type_id: 'DUMP_TRUCK', current_hm_km: 8000, is_active: true },
+      { id: 'EX-002', unit_number: 'EX-002', name: 'Excavator PC2000 #002', equipment_type_id: 'PC2000', current_hm_km: 18000, is_active: true },
+      { id: 'EX-005', unit_number: 'EX-005', name: 'Excavator EX1200 #005', equipment_type_id: 'EX1200', current_hm_km: 9000, is_active: true },
+      { id: 'DZ-010', unit_number: 'DZ-010', name: 'Bulldozer D85SS #010', equipment_type_id: 'D85SS', current_hm_km: 25000, is_active: true },
+    ];
+
+    const mockEmployees = [
+      { id: 'EMP-101', name: 'Yusuf Mansur', department_id: 'DEPT-MECH-HE', position: 'Senior Heavy Equipment Mechanic', is_mechanic: true, is_active: true },
+      { id: 'EMP-102', name: 'Agus Wibowo', department_id: 'DEPT-MECH-HE', position: 'Hydraulic Specialist Mechanic', is_mechanic: true, is_active: true },
+      { id: 'EMP-103', name: 'Rahmat Hidayat', department_id: 'DEPT-MECH-DT', position: 'Dump Truck Senior Mechanic', is_mechanic: true, is_active: true },
+      { id: 'EMP-104', name: 'Wahyu Setiawan', department_id: 'DEPT-MECH-DT', position: 'Brake & Transmission Specialist', is_mechanic: true, is_active: true },
+    ];
+
+    test('Identifies active warehouse category correctly', () => {
+      assert.strictEqual(getWarehouseCategory('WH-CONT-HE', 'HEAVY_EQUIPMENT'), 'HE');
+      assert.strictEqual(getWarehouseCategory('WH-MAIN-HE', 'HEAVY_EQUIPMENT'), 'HE');
+      assert.strictEqual(getWarehouseCategory('WH-CONT-DT', 'DUMP_TRUCK'), 'DT');
+      assert.strictEqual(getWarehouseCategory('WH-MAIN-DT', 'DUMP_TRUCK'), 'DT');
+      assert.strictEqual(getWarehouseCategory('WH-GEN-01', 'GENERAL'), 'ALL');
+    });
+
+    test('Correctly classifies equipment as DT vs HE', () => {
+      assert.strictEqual(isDumpTruckEquipment(mockEquipments[0]), true);
+      assert.strictEqual(isHeavyEquipment(mockEquipments[0]), false);
+
+      assert.strictEqual(isDumpTruckEquipment(mockEquipments[3]), false);
+      assert.strictEqual(isHeavyEquipment(mockEquipments[3]), true);
+
+      assert.strictEqual(isHeavyEquipment(mockEquipments[5]), true);
+      assert.strictEqual(isDumpTruckEquipment(mockEquipments[5]), false);
+    });
+
+    test('Correctly classifies mechanics as DT vs HE', () => {
+      assert.strictEqual(isHeavyEquipmentMechanic(mockEmployees[0]), true);
+      assert.strictEqual(isDumpTruckMechanic(mockEmployees[0]), false);
+
+      assert.strictEqual(isHeavyEquipmentMechanic(mockEmployees[1]), true);
+      assert.strictEqual(isDumpTruckMechanic(mockEmployees[1]), false);
+
+      assert.strictEqual(isDumpTruckMechanic(mockEmployees[2]), true);
+      assert.strictEqual(isHeavyEquipmentMechanic(mockEmployees[2]), false);
+
+      assert.strictEqual(isDumpTruckMechanic(mockEmployees[3]), true);
+      assert.strictEqual(isHeavyEquipmentMechanic(mockEmployees[3]), false);
+    });
+
+    test('Filters equipment list strictly according to fleet category', () => {
+      const heFiltered = filterEquipmentByCategory(mockEquipments, 'HE');
+      assert.strictEqual(heFiltered.length, 3);
+      assert.ok(heFiltered.every((eq) => eq.unit_number.startsWith('EX') || eq.unit_number.startsWith('DZ')));
+
+      const dtFiltered = filterEquipmentByCategory(mockEquipments, 'DT');
+      assert.strictEqual(dtFiltered.length, 3);
+      assert.ok(dtFiltered.every((eq) => eq.unit_number.startsWith('DT')));
+
+      const allFiltered = filterEquipmentByCategory(mockEquipments, 'ALL');
+      assert.strictEqual(allFiltered.length, 6);
+    });
+
+    test('Filters mechanics list strictly according to fleet category', () => {
+      const heMechanics = filterMechanicsByCategory(mockEmployees, 'HE');
+      assert.strictEqual(heMechanics.length, 2);
+      assert.ok(heMechanics.every((m) => m.department_id === 'DEPT-MECH-HE'));
+
+      const dtMechanics = filterMechanicsByCategory(mockEmployees, 'DT');
+      assert.strictEqual(dtMechanics.length, 2);
+      assert.ok(dtMechanics.every((m) => m.department_id === 'DEPT-MECH-DT'));
+
+      const allMechanics = filterMechanicsByCategory(mockEmployees, 'ALL');
+      assert.strictEqual(allMechanics.length, 4);
     });
   });
 });

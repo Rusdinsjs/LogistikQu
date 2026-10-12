@@ -133,6 +133,6 @@ echo "Role permissions updated: $(echo "$UPDATE_ROLE_RES" | jq -r '.message')"
 curl -s -X PUT http://127.0.0.1:8080/api/v1/roles/SUPERVISOR_HE/permissions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $SA_TOKEN" \
-  -d '{"permissions": ["master.view", "bins.view", "inventory.view", "issue.view", "issue.approve", "returns.view", "returns.complete", "request.view", "request.approve", "drops.view", "adjustment.view", "adjustment.approve", "reports.view", "audit.view"]}' > /dev/null
+  -d '{"permissions": ["master.view", "bins.view", "inventory.view", "issue.view", "issue.approve", "returns.view", "returns.complete", "request.view", "request.approve", "drops.view", "adjustment.view", "adjustment.approve", "reports.view", "audit.view", "mechanic_request.view", "mechanic_request.approve", "mechanic_request.fulfill"]}' > /dev/null
 
 echo ">>> ALL RBAC AND PERMISSION OVERRIDE TESTS PASSED 100%! <<<"

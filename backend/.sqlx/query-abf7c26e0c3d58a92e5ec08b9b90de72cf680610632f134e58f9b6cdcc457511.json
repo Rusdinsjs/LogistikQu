@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                t.transaction_number,\n                t.created_at as issued_at,\n                t.warehouse_id,\n                t.unit_number,\n                t.unit_name,\n                t.unit_type,\n                t.hm_km,\n                t.site_id,\n                t.receiver_name,\n                t.mechanic_name,\n                t.work_order_number,\n                i.spare_part_id,\n                p.part_name,\n                i.qty,\n                COALESCE(i.unit_price, p.unit_cost, 0::numeric) as \"unit_price!\",\n                COALESCE(i.total_price, i.qty * COALESCE(p.unit_cost, 0), 0::numeric) as \"total_price!\"\n            FROM issue_transactions t\n            JOIN issue_transaction_items i ON t.id = i.transaction_id\n            JOIN spare_parts p ON i.spare_part_id = p.id\n            WHERE t.warehouse_id = ANY($1)\n              AND ($2::text IS NULL OR t.unit_number ILIKE '%' || $2 || '%')\n            ORDER BY t.created_at DESC\n            LIMIT 500\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "transaction_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "issued_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "warehouse_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "unit_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "unit_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "hm_km",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "receiver_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "mechanic_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "work_order_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "spare_part_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "part_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "qty",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 14,
+        "name": "unit_price!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 15,
+        "name": "total_price!",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "abf7c26e0c3d58a92e5ec08b9b90de72cf680610632f134e58f9b6cdcc457511"
+}

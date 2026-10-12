@@ -1,7 +1,10 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_financial_access, check_permission, AuthUser},
+        middleware::{
+            check_financial_access, check_permission, get_user_fleet_category,
+            resolve_warehouse_filter, AuthUser,
+        },
     },
     application::services::report_service::{
         MechanicConsumptionReport, SiteConsumptionReport, UnitConsumptionReport,
@@ -35,7 +38,13 @@ pub async fn report_by_unit(
     AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<UnitConsumptionReport>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
-    let reports = state.services.report.report_by_unit().await?;
+    let allowed_whs = resolve_warehouse_filter(&state.pool, &user, None).await?;
+    let fleet_cat = get_user_fleet_category(&state.pool, &user).await?;
+    let reports = state
+        .services
+        .report
+        .report_by_unit(&allowed_whs, fleet_cat.as_deref())
+        .await?;
     Ok(Json(reports))
 }
 
@@ -44,7 +53,8 @@ pub async fn report_by_site(
     AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<SiteConsumptionReport>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
-    let reports = state.services.report.report_by_site().await?;
+    let allowed_whs = resolve_warehouse_filter(&state.pool, &user, None).await?;
+    let reports = state.services.report.report_by_site(&allowed_whs).await?;
     Ok(Json(reports))
 }
 
@@ -53,7 +63,12 @@ pub async fn report_by_mechanic(
     AuthUser(user): AuthUser,
 ) -> Result<Json<Vec<MechanicConsumptionReport>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
-    let reports = state.services.report.report_by_mechanic().await?;
+    let allowed_whs = resolve_warehouse_filter(&state.pool, &user, None).await?;
+    let reports = state
+        .services
+        .report
+        .report_by_mechanic(&allowed_whs)
+        .await?;
     Ok(Json(reports))
 }
 
@@ -65,10 +80,12 @@ pub async fn report_stock_balance(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<StockBalanceReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
     let reports = state
         .services
         .report
-        .stock_balance_report(params.warehouse_id.as_deref())
+        .stock_balance_report(&allowed_whs)
         .await?;
     Ok(Json(reports))
 }
@@ -80,10 +97,12 @@ pub async fn report_stock_valuation(
 ) -> Result<Json<Vec<StockValuationReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
     check_financial_access(&state.pool, &user).await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
     let reports = state
         .services
         .report
-        .stock_valuation_report(params.warehouse_id.as_deref())
+        .stock_valuation_report(&allowed_whs)
         .await?;
     Ok(Json(reports))
 }
@@ -94,10 +113,12 @@ pub async fn report_stock_aging(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<StockAgingReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
     let mut reports = state
         .services
         .report
-        .stock_aging_report(params.warehouse_id.as_deref())
+        .stock_aging_report(&allowed_whs)
         .await?;
     if !user.can_access_financials() {
         for r in &mut reports {
@@ -116,13 +137,17 @@ pub async fn report_issue_history(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<IssueHistoryReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
+    let fleet_cat = get_user_fleet_category(&state.pool, &user).await?;
     let mut reports = state
         .services
         .report
         .issue_history_report(
-            params.warehouse_id.as_deref(),
+            &allowed_whs,
             params.unit_number.as_deref(),
             params.limit,
+            fleet_cat.as_deref(),
         )
         .await?;
     if !user.can_access_financials() {
@@ -140,10 +165,12 @@ pub async fn report_consumption_trend(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<ConsumptionTrendReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
     let mut reports = state
         .services
         .report
-        .consumption_trend_report(params.warehouse_id.as_deref())
+        .consumption_trend_report(&allowed_whs)
         .await?;
     if !user.can_access_financials() {
         for r in &mut reports {
@@ -159,10 +186,18 @@ pub async fn report_equipment_consumption(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<EquipmentConsumptionReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
+    let fleet_cat = get_user_fleet_category(&state.pool, &user).await?;
     let mut reports = state
         .services
         .report
-        .equipment_consumption_report(params.site_id.as_deref(), params.unit_number.as_deref())
+        .equipment_consumption_report(
+            &allowed_whs,
+            params.site_id.as_deref(),
+            params.unit_number.as_deref(),
+            fleet_cat.as_deref(),
+        )
         .await?;
     if !user.can_access_financials() {
         for r in &mut reports {
@@ -178,9 +213,16 @@ pub async fn report_equipment_consumption(
 pub async fn report_warehouse_performance(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
+    Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<WarehousePerformanceReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
-    let mut reports = state.services.report.warehouse_performance_report().await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
+    let mut reports = state
+        .services
+        .report
+        .warehouse_performance_report(&allowed_whs)
+        .await?;
     if !user.can_access_financials() {
         for r in &mut reports {
             r.total_valuation = Decimal::ZERO;
@@ -195,10 +237,12 @@ pub async fn report_replenishment_efficiency(
     Query(params): Query<ReportFilterParams>,
 ) -> Result<Json<Vec<ReplenishmentEfficiencyReportItem>>, AppError> {
     check_permission(&state.pool, &user, "reports.view").await?;
+    let allowed_whs =
+        resolve_warehouse_filter(&state.pool, &user, params.warehouse_id.as_deref()).await?;
     let reports = state
         .services
         .report
-        .replenishment_efficiency_report(params.warehouse_id.as_deref())
+        .replenishment_efficiency_report(&allowed_whs)
         .await?;
     Ok(Json(reports))
 }

@@ -1,5 +1,7 @@
 use crate::api::handlers::{
-    adjustment::{approve_adjustment, create_adjustment, list_adjustments},
+    adjustment::{
+        approve_adjustment, create_adjustment, get_adjustment, list_adjustments, reject_adjustment,
+    },
     audit::list_audit_logs,
     auth::{
         create_user, delete_user, get_me, list_demo_users, list_permissions, list_roles,
@@ -16,17 +18,25 @@ use crate::api::handlers::{
         get_dashboard_summary, get_stock_detail, get_stock_movements, import_initial_stock,
         list_inventory_stock, query_ledger, transfer_stock, update_stock_photo, write_off_stock,
     },
-    issue::{approve_critical_issue, create_issue, get_issue_detail, list_issues},
+    issue::{
+        approve_critical_issue, create_issue, get_issue_detail, list_issues, record_receipt_printed,
+    },
     maintenance::{
         create_maintenance_log, get_cost_per_equipment, get_hierarchical_consumption,
         list_components, list_maintenance_history,
     },
     master::{
-        create_employee, create_equipment, create_site, create_warehouse,
-        create_warehouse_category, delete_site, delete_warehouse, delete_warehouse_category,
-        list_employees, list_equipment, list_sites, list_spare_parts, list_warehouse_categories,
-        list_warehouses, update_site, update_spare_part, update_warehouse,
-        update_warehouse_category,
+        create_device, create_employee, create_equipment, create_site, create_warehouse,
+        create_warehouse_category, delete_device, delete_site, delete_warehouse,
+        delete_warehouse_category, list_devices, list_employees, list_equipment, list_sites,
+        list_spare_parts, list_warehouse_categories, list_warehouses, update_device, update_site,
+        update_spare_part, update_warehouse, update_warehouse_category,
+    },
+    mechanic_requests::{
+        approve_mechanic_request, cancel_mechanic_request, create_mechanic_request,
+        fulfill_mechanic_request, get_mechanic_context, get_mechanic_request_detail,
+        get_mechanic_request_summary, list_mechanic_requests, reject_mechanic_request,
+        request_revision_mechanic_request, update_mechanic_request,
     },
     metrics::prometheus_metrics_handler,
     notifications::{
@@ -100,6 +110,12 @@ pub fn create_api_router(state: AppState) -> Router {
             "/master/warehouse-categories/{id}",
             put(update_warehouse_category).delete(delete_warehouse_category),
         )
+        // Master Mobile Devices & Handhelds
+        .route("/master/devices", get(list_devices).post(create_device))
+        .route(
+            "/master/devices/{id}",
+            put(update_device).delete(delete_device),
+        )
         // Warehouse Bins & Container Racks
         .route(
             "/warehouses/{warehouse_id}/bins",
@@ -136,6 +152,41 @@ pub fn create_api_router(state: AppState) -> Router {
         .route("/issues", post(create_issue).get(list_issues))
         .route("/issues/{id}", get(get_issue_detail))
         .route("/issues/{id}/approve", post(approve_critical_issue))
+        .route("/issues/{id}/print-receipt", post(record_receipt_printed))
+        // Mechanic Stock Requests
+        .route(
+            "/mechanic-requests",
+            get(list_mechanic_requests).post(create_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/summary",
+            get(get_mechanic_request_summary),
+        )
+        .route("/mechanic-requests/me/context", get(get_mechanic_context))
+        .route(
+            "/mechanic-requests/{id}",
+            get(get_mechanic_request_detail).put(update_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/{id}/approve",
+            post(approve_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/{id}/request-revision",
+            post(request_revision_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/{id}/reject",
+            post(reject_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/{id}/cancel",
+            post(cancel_mechanic_request),
+        )
+        .route(
+            "/mechanic-requests/{id}/fulfill",
+            post(fulfill_mechanic_request),
+        )
         // Used Part Return Tracking (Core Return)
         .route("/returns", get(list_returns))
         .route("/returns/{id}", get(get_return_detail))
@@ -189,7 +240,9 @@ pub fn create_api_router(state: AppState) -> Router {
             "/adjustments",
             post(create_adjustment).get(list_adjustments),
         )
+        .route("/adjustments/{id}", get(get_adjustment))
         .route("/adjustments/{id}/approve", put(approve_adjustment))
+        .route("/adjustments/{id}/reject", put(reject_adjustment))
         // Reports (Legacy & Enterprise Phase 11)
         .route("/reports/consumption-by-unit", get(report_by_unit))
         .route("/reports/consumption-by-site", get(report_by_site))

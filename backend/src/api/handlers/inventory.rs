@@ -1,7 +1,9 @@
 use crate::{
     api::{
         handlers::auth::AppState,
-        middleware::{check_permission, check_warehouse_access, AuthUser},
+        middleware::{
+            check_permission, check_warehouse_access, get_default_user_warehouse, AuthUser,
+        },
     },
     application::services::inventory_service::ImportStockPayload,
     domain::entities::{
@@ -30,9 +32,10 @@ pub async fn list_inventory_stock(
     AuthUser(user): AuthUser,
     Query(query): Query<InventoryQuery>,
 ) -> Result<Json<Vec<InventoryStockItem>>, AppError> {
-    let warehouse_id = query
-        .warehouse_id
-        .unwrap_or_else(|| "WH-CONT-HE".to_string());
+    let warehouse_id = match query.warehouse_id.filter(|s| !s.trim().is_empty()) {
+        Some(wh) => wh,
+        None => get_default_user_warehouse(&state.pool, &user).await?,
+    };
     check_warehouse_access(&state.pool, &user, &warehouse_id).await?;
     check_permission(&state.pool, &user, "inventory.view").await?;
 
@@ -125,9 +128,10 @@ pub async fn get_dashboard_summary(
     AuthUser(user): AuthUser,
     Query(query): Query<InventoryQuery>,
 ) -> Result<Json<DashboardSummary>, AppError> {
-    let warehouse_id = query
-        .warehouse_id
-        .unwrap_or_else(|| "WH-CONT-HE".to_string());
+    let warehouse_id = match query.warehouse_id.filter(|s| !s.trim().is_empty()) {
+        Some(wh) => wh,
+        None => get_default_user_warehouse(&state.pool, &user).await?,
+    };
     check_warehouse_access(&state.pool, &user, &warehouse_id).await?;
 
     let summary = state

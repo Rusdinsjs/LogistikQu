@@ -1,6 +1,7 @@
 package com.sjs.logistikqu.presentation.screens.auth
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,7 +14,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.sjs.logistikqu.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -31,7 +37,6 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val activity = context as? FragmentActivity
-    var tempUrl by remember(uiState.serverUrl) { mutableStateOf(uiState.serverUrl) }
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
@@ -43,6 +48,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Slate950)
+            .statusBarsPadding()
             .padding(20.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -52,34 +58,14 @@ fun LoginScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Bar with Server Settings
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = { viewModel.toggleServerSettings(true) }) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Pengaturan Server",
-                        tint = IndustrialCyan
-                    )
-                }
-            }
-
-            // Enterprise App Logo
-            Box(
+            // Enterprise App Logo (SJS-VIPO Emblem)
+            Image(
+                painter = painterResource(id = R.drawable.app_logo),
+                contentDescription = "Logo SJS-VIPO LogistikQu",
                 modifier = Modifier
-                    .size(68.dp)
-                    .background(IndustrialEmerald, RoundedCornerShape(18.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "LQ",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Slate950
-                )
-            }
+                    .size(92.dp)
+                    .clip(RoundedCornerShape(20.dp))
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -98,36 +84,34 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Server URL Badge (Clickable to change)
+            // Cloud Server Connection Pill (Fixed Production Backend)
             Surface(
-                modifier = Modifier.clickable { viewModel.toggleServerSettings(true) },
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = Slate900,
                 border = BorderStroke(1.dp, Slate800)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Dns,
-                        contentDescription = null,
-                        tint = IndustrialCyan,
-                        modifier = Modifier.size(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(IndustrialEmerald, RoundedCornerShape(4.dp))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "logistik.sjsgroup.online",
+                        color = Slate200,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Server: ${uiState.serverUrl}",
-                        color = Slate300,
+                        text = "• Auto-Sync",
+                        color = IndustrialEmerald,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = null,
-                        tint = Slate500,
-                        modifier = Modifier.size(12.dp)
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -205,34 +189,118 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Quick Demo Account Chips
-            Text(
-                text = "Pilih Akun Demo Cepat:",
-                fontSize = 11.sp,
-                color = Slate400,
-                modifier = Modifier.align(Alignment.Start)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Akses Akun Demo Cepat:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate300
+                )
+                Text(
+                    text = "Password: password123",
+                    fontSize = 10.sp,
+                    color = Slate500
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
 
+            // 1. MEKANIK (MOBILE FIELD REQUEST)
+            Text(
+                text = "PERAN MEKANIK (MOBILE FIELD REQUEST)",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = IndustrialPurple,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 QuickAccountChip(
-                    label = "superadmin",
-                    role = "Super Admin",
-                    onClick = {
-                        viewModel.onUsernameChange("superadmin")
-                        viewModel.onPasswordChange("password123")
-                    },
+                    label = "mekanik_he",
+                    role = "Mekanik HE",
+                    description = "Alat Berat • EMP-101",
+                    accentColor = IndustrialPurple,
+                    onClick = { viewModel.quickLogin("mekanik_he") },
                     modifier = Modifier.weight(1f)
                 )
                 QuickAccountChip(
+                    label = "mekanik_dt",
+                    role = "Mekanik DT",
+                    description = "Dump Truck • EMP-103",
+                    accentColor = IndustrialPurple,
+                    onClick = { viewModel.quickLogin("mekanik_dt") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 2. ADMIN KONTAINER & GUDANG
+            Text(
+                text = "ADMIN KONTAINER & GUDANG UTAMA",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = IndustrialCyan,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickAccountChip(
                     label = "admin_cont_he",
-                    role = "Admin Kontainer",
-                    onClick = {
-                        viewModel.onUsernameChange("admin_cont_he")
-                        viewModel.onPasswordChange("password123")
-                    },
+                    role = "Admin Kontainer HE",
+                    description = "POS Issue & Stock",
+                    accentColor = IndustrialCyan,
+                    onClick = { viewModel.quickLogin("admin_cont_he") },
+                    modifier = Modifier.weight(1f)
+                )
+                QuickAccountChip(
+                    label = "admin_main_he",
+                    role = "Admin Utama HE",
+                    description = "Drop & Verifikasi",
+                    accentColor = IndustrialBlue,
+                    onClick = { viewModel.quickLogin("admin_main_he") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 3. SUPERVISOR & MANAJEMEN
+            Text(
+                text = "SUPERVISOR & MANAJEMEN SISTEM",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = IndustrialAmber,
+                modifier = Modifier.align(Alignment.Start)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickAccountChip(
+                    label = "supervisor_he",
+                    role = "Supervisor HE",
+                    description = "Approval STO",
+                    accentColor = IndustrialAmber,
+                    onClick = { viewModel.quickLogin("supervisor_he") },
+                    modifier = Modifier.weight(1f)
+                )
+                QuickAccountChip(
+                    label = "manager",
+                    role = "Manager Logistik",
+                    description = "Executive Oversight",
+                    accentColor = IndustrialEmerald,
+                    onClick = { viewModel.quickLogin("manager") },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -244,21 +312,11 @@ fun LoginScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 QuickAccountChip(
-                    label = "supervisor_he",
-                    role = "Supervisor",
-                    onClick = {
-                        viewModel.onUsernameChange("supervisor_he")
-                        viewModel.onPasswordChange("password123")
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                QuickAccountChip(
-                    label = "manager",
-                    role = "Manager",
-                    onClick = {
-                        viewModel.onUsernameChange("manager")
-                        viewModel.onPasswordChange("password123")
-                    },
+                    label = "superadmin",
+                    role = "Super Admin Sistem",
+                    description = "Akses Root Penuh",
+                    accentColor = Slate300,
+                    onClick = { viewModel.quickLogin("superadmin") },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -271,9 +329,7 @@ fun LoginScreen(
                         biometricManager.promptBiometric(
                             activity = activity,
                             onSuccess = {
-                                viewModel.onUsernameChange("superadmin")
-                                viewModel.onPasswordChange("password123")
-                                viewModel.login()
+                                viewModel.quickLogin("superadmin")
                             },
                             onError = { /* ignored */ }
                         )
@@ -290,106 +346,6 @@ fun LoginScreen(
             }
         }
     }
-
-    // Server Settings Dialog
-    if (uiState.showServerSettings) {
-        AlertDialog(
-            onDismissRequest = { viewModel.toggleServerSettings(false) },
-            containerColor = Slate900,
-            title = {
-                Text(
-                    text = "Konfigurasi URL Server",
-                    color = White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Pilih host backend atau masukkan URL server kustom:",
-                        color = Slate400,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Preset buttons
-                    Button(
-                        onClick = { tempUrl = "http://10.0.2.2:8090/" },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (tempUrl.contains("10.0.2.2")) IndustrialCyan else Slate800),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Android Emulator (10.0.2.2:8090)",
-                            color = if (tempUrl.contains("10.0.2.2")) Slate950 else White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { tempUrl = "http://192.168.100.7:8090/" },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (tempUrl.contains("192.168.100.7")) IndustrialEmerald else Slate800),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Wi-Fi LAN Host (192.168.100.7:8090)",
-                            color = if (tempUrl.contains("192.168.100.7")) Slate950 else White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = { tempUrl = "https://logistik.sjsgroup.online/" },
-                        colors = ButtonDefaults.buttonColors(containerColor = if (tempUrl.contains("sjsgroup")) IndustrialAmber else Slate800),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "VPS Online (logistik.sjsgroup.online)",
-                            color = if (tempUrl.contains("sjsgroup")) Slate950 else White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = tempUrl,
-                        onValueChange = { tempUrl = it },
-                        label = { Text("URL Server", color = Slate400) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = White,
-                            unfocusedTextColor = Slate200,
-                            focusedBorderColor = IndustrialCyan
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.updateServerUrl(tempUrl) },
-                    colors = ButtonDefaults.buttonColors(containerColor = IndustrialEmerald)
-                ) {
-                    Text("SIMPAN", color = Slate950, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.toggleServerSettings(false) }) {
-                    Text("BATAL", color = Slate400)
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -397,20 +353,26 @@ fun QuickAccountChip(
     label: String,
     role: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accentColor: Color = IndustrialCyan,
+    description: String? = null
 ) {
     Surface(
-        modifier = modifier.clickable { onClick() },
+        onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(10.dp),
         color = Slate900,
         border = BorderStroke(1.dp, Slate800)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = label, color = IndustrialCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(text = role, color = Slate400, fontSize = 10.sp)
+            Text(text = label, color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(text = role, color = Slate200, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+            if (description != null) {
+                Text(text = description, color = Slate400, fontSize = 9.sp)
+            }
         }
     }
 }

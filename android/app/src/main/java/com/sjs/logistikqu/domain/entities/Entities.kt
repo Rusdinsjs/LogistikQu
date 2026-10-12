@@ -7,10 +7,20 @@ data class User(
     val role: String,
     val warehouseId: String?,
     val token: String,
-    val refreshToken: String
+    val refreshToken: String,
+    val permissions: List<String> = emptyList()
 ) {
-    val isSupervisor: Boolean get() = role.contains("supervisor", ignoreCase = true) || role == "superadmin"
-    val isOperator: Boolean get() = role.contains("admin_cont", ignoreCase = true) || role.contains("operator", ignoreCase = true)
+    val normalizedRole: String get() = role.uppercase()
+    val isSupervisor: Boolean get() = normalizedRole.contains("SUPERVISOR") || normalizedRole.contains("MANAGER") || normalizedRole == "SUPER_ADMIN" || normalizedRole == "SUPERADMIN"
+    val isContainerAdmin: Boolean get() = normalizedRole.contains("CONTAINER") || normalizedRole.contains("ADMIN_CONT") || normalizedRole == "SUPER_ADMIN" || normalizedRole == "SUPERADMIN"
+    val isMainAdmin: Boolean get() = normalizedRole.contains("MAIN_ADMIN") || normalizedRole.contains("ADMIN_MAIN") || normalizedRole.contains("MAIN") || normalizedRole == "SUPER_ADMIN" || normalizedRole == "SUPERADMIN"
+    val isMechanic: Boolean get() = normalizedRole.contains("MECHANIC") || normalizedRole.contains("MEKANIK")
+    val isSuperAdmin: Boolean get() = normalizedRole == "SUPERADMIN" || normalizedRole == "SUPER_ADMIN" || normalizedRole == "MANAGER"
+
+    fun hasPermission(permission: String): Boolean {
+        if (isSuperAdmin) return true
+        return permissions.contains(permission)
+    }
 }
 
 data class SparePart(
@@ -111,7 +121,11 @@ data class IssueTransaction(
     val evidencePhotoPath: String?,
     val latitude: Double?,
     val longitude: Double?,
-    val timestamp: Long
+    val timestamp: Long,
+    val signatureType: String = "DIGITAL",
+    val mechanicSignatureUrl: String? = null,
+    val receiptPrinted: Boolean = true,
+    val signedReceiptPhotoUrl: String? = null
 )
 
 data class GoodsReceipt(
@@ -122,7 +136,10 @@ data class GoodsReceipt(
     val receivedBy: String,
     val notes: String,
     val proofPhotoPath: String?,
-    val timestamp: Long
+    val timestamp: Long,
+    val sparePartId: String? = null,
+    val receivedQty: Double? = null,
+    val targetBinCode: String? = null
 )
 
 data class WarehouseTransfer(
@@ -148,3 +165,41 @@ data class BarcodeScanResult(
     val type: BarcodeType,
     val extractedCode: String
 )
+
+data class ReplenishmentRecommendation(
+    val sparePartId: String,
+    val partName: String,
+    val unitOfMeasure: String,
+    val currentStock: Double,
+    val minStock: Double,
+    val maxStock: Double,
+    val safetyStock: Double,
+    val leadTimeDays: Int,
+    val avgDailyUsage: Double,
+    val recommendedOrderQty: Double,
+    val reorderPoint: Double?,
+    val consumptionTrend: String?
+)
+
+data class ReplenishmentDraftItem(
+    val sparePartId: String,
+    val partName: String,
+    val unitOfMeasure: String,
+    val currentStock: Double,
+    val recommendedQty: Double,
+    val requestedQty: Double,
+    val notes: String = ""
+)
+
+data class WarehouseBin(
+    val id: String,
+    val warehouseId: String,
+    val binCode: String,
+    val zone: String,
+    val shelfLevel: String,
+    val capacityParts: Int,
+    val currentItemsCount: Long,
+    val totalQty: Double,
+    val description: String?
+)
+

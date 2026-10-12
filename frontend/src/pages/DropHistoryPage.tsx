@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { dropApi } from '../api';
 import type { MainDrop } from '../types';
+import { getUserFleetCategory, isWarehouseInCategory } from '../utils/fleetCategory';
 import {
   Truck,
   RotateCcw,
@@ -14,7 +15,8 @@ import {
 } from 'lucide-react';
 
 export const DropHistoryPage: React.FC = () => {
-  const { currentWarehouse } = useAuth();
+  const { currentWarehouse, user } = useAuth();
+  const userDivision = getUserFleetCategory(user);
   const [drops, setDrops] = useState<MainDrop[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDropId, setSelectedDropId] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export const DropHistoryPage: React.FC = () => {
       setLoading(true);
       const whId = filterWh || (currentWarehouse?.warehouse_type === 'CONTAINER' ? currentWarehouse.id : '');
       const data = await dropApi.listDrops(whId || undefined);
-      setDrops(data);
+      setDrops(data.filter((d) => isWarehouseInCategory(d.container_warehouse_id, undefined, userDivision)));
     } catch (err) {
       console.error(err);
     } finally {
@@ -120,9 +122,19 @@ export const DropHistoryPage: React.FC = () => {
             onChange={(e) => setFilterWh(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           >
-            <option value="">Semua Gudang Kontainer</option>
-            <option value="WH-CONT-HE">WH-CONT-HE (Kontainer Heavy Equipment)</option>
-            <option value="WH-CONT-DT">WH-CONT-DT (Kontainer Dump Truck)</option>
+            <option value="">
+              {userDivision === 'DT'
+                ? 'Gudang Kontainer Dump Truck (WH-CONT-DT)'
+                : userDivision === 'HE'
+                ? 'Gudang Kontainer Alat Berat (WH-CONT-HE)'
+                : 'Semua Gudang Kontainer'}
+            </option>
+            {userDivision !== 'DT' && (
+              <option value="WH-CONT-HE">WH-CONT-HE (Kontainer Heavy Equipment)</option>
+            )}
+            {userDivision !== 'HE' && (
+              <option value="WH-CONT-DT">WH-CONT-DT (Kontainer Dump Truck)</option>
+            )}
           </select>
         </div>
       </div>

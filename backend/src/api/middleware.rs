@@ -42,7 +42,7 @@ where
     }
 }
 
-// Helper untuk mengecek apakah user berhak mengakses gudang tertentu
+// Helper untuk mengecek apakah user berhak mengakses gudang tertentu (termasuk sub-gudang kontainer di bawah gudang utama user)
 pub async fn check_warehouse_access(
     pool: &PgPool,
     user: &Claims,
@@ -55,8 +55,21 @@ pub async fn check_warehouse_access(
     let has_access = sqlx::query_scalar::<_, bool>(
         r#"
         SELECT EXISTS(
-            SELECT 1 FROM user_warehouses
-            WHERE user_id = $1 AND warehouse_id = $2
+            SELECT 1 FROM user_warehouses uw
+            WHERE uw.user_id = $1
+              AND (
+                  uw.warehouse_id = $2
+                  OR EXISTS (
+                      SELECT 1 FROM warehouse_supply_links wsl
+                      WHERE wsl.main_warehouse_id = uw.warehouse_id
+                        AND wsl.sub_warehouse_id = $2
+                  )
+                  OR EXISTS (
+                      SELECT 1 FROM warehouses w
+                      WHERE w.parent_warehouse_id = uw.warehouse_id
+                        AND w.id = $2
+                  )
+              )
         )
         "#,
     )
@@ -208,6 +221,7 @@ pub async fn get_effective_user_permissions(
 }
 
 // Helper untuk mendapatkan seluruh daftar warehouse_id yang diizinkan untuk pengguna
+// (termasuk sub-gudang kontainer yang disuplai oleh gudang utama milik user)
 pub async fn get_user_warehouse_ids(pool: &PgPool, user: &Claims) -> Result<Vec<String>, AppError> {
     if user.role_id == "SUPER_ADMIN" || user.role_id == "MANAGER" {
         let all = sqlx::query_scalar::<_, String>("SELECT id FROM warehouses ORDER BY id")
@@ -217,13 +231,243 @@ pub async fn get_user_warehouse_ids(pool: &PgPool, user: &Claims) -> Result<Vec<
     }
 
     let list = sqlx::query_scalar::<_, String>(
-        "SELECT warehouse_id FROM user_warehouses WHERE user_id = $1 ORDER BY warehouse_id",
+        r#"
+        SELECT DISTINCT w_id FROM (
+            SELECT warehouse_id AS w_id FROM user_warehouses WHERE user_id = $1
+            UNION
+            SELECT wsl.sub_warehouse_id AS w_id
+            FROM user_warehouses uw
+            JOIN warehouse_supply_links wsl ON wsl.main_warehouse_id = uw.warehouse_id
+            WHERE uw.user_id = $1
+            UNION
+            SELECT w.id AS w_id
+            FROM user_warehouses uw
+            JOIN warehouses w ON w.parent_warehouse_id = uw.warehouse_id
+            WHERE uw.user_id = $1
+        ) sub
+        ORDER BY w_id
+        "#,
     )
     .bind(user.sub)
     .fetch_all(pool)
     .await?;
 
     Ok(list)
+}
+
+// Helper untuk meresolusi daftar warehouse_id berdasarkan filter opsional dan hak akses user
+pub async fn resolve_warehouse_filter(
+    pool: &PgPool,
+    user: &Claims,
+    requested_wh: Option<&str>,
+) -> Result<Vec<String>, AppError> {
+    if let Some(wh) = requested_wh.map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        check_warehouse_access(pool, user, wh).await?;
+        let expanded = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT DISTINCT w_id FROM (
+                SELECT $1::text AS w_id
+                UNION
+                SELECT sub_warehouse_id AS w_id FROM warehouse_supply_links WHERE main_warehouse_id = $1
+                UNION
+                SELECT id AS w_id FROM warehouses WHERE parent_warehouse_id = $1
+            ) sub
+            ORDER BY w_id
+            "#,
+        )
+        .bind(wh)
+        .fetch_all(pool)
+        .await?;
+        return Ok(expanded);
+    }
+
+    get_user_warehouse_ids(pool, user).await
+}
+
+// Helper untuk menentukan kategori divisi armada user: Some("HE"), Some("DT"), atau None (ALL)
+pub async fn get_user_fleet_category(
+    pool: &PgPool,
+    user: &Claims,
+) -> Result<Option<String>, AppError> {
+    let role_upper = user.role_id.to_uppercase();
+    if role_upper == "SUPER_ADMIN" || role_upper == "MANAGER" {
+        return Ok(None);
+    }
+
+    if role_upper.ends_with("_HE") || role_upper.contains("_HE_") {
+        return Ok(Some("HE".to_string()));
+    }
+    if role_upper.ends_with("_DT") || role_upper.contains("_DT_") {
+        return Ok(Some("DT".to_string()));
+    }
+
+    let wh_cats: Vec<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT UPPER(w.id), UPPER(COALESCE(w.category_id, ''))
+        FROM user_warehouses uw
+        JOIN warehouses w ON uw.warehouse_id = w.id
+        WHERE uw.user_id = $1
+        "#,
+    )
+    .bind(user.sub)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let has_he = wh_cats
+        .iter()
+        .any(|(id, cat)| cat == "HEAVY_EQUIPMENT" || id.contains("HE"));
+    let has_dt = wh_cats
+        .iter()
+        .any(|(id, cat)| cat == "DUMP_TRUCK" || id.contains("DT"));
+
+    if has_he && !has_dt {
+        return Ok(Some("HE".to_string()));
+    }
+    if has_dt && !has_he {
+        return Ok(Some("DT".to_string()));
+    }
+
+    let emp_dept: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT UPPER(COALESCE(e.department_id, ''))
+        FROM users u
+        LEFT JOIN employees e ON u.employee_id = e.id
+        WHERE u.id = $1
+        "#,
+    )
+    .bind(user.sub)
+    .fetch_optional(pool)
+    .await
+    .unwrap_or(None);
+
+    if let Some(dept) = emp_dept {
+        if dept.contains("DT") || dept.contains("DUMP_TRUCK") {
+            return Ok(Some("DT".to_string()));
+        }
+        if dept.contains("HE") || dept.contains("HEAVY_EQUIPMENT") {
+            return Ok(Some("HE".to_string()));
+        }
+    }
+
+    Ok(None)
+}
+
+// Helper untuk mendapatkan default container warehouse sesuai divisi user
+pub async fn get_default_user_warehouse(pool: &PgPool, user: &Claims) -> Result<String, AppError> {
+    if let Some(cat) = get_user_fleet_category(pool, user).await? {
+        if cat == "DT" {
+            return Ok("WH-CONT-DT".to_string());
+        }
+    }
+    Ok("WH-CONT-HE".to_string())
+}
+
+// Helper untuk mengecek apakah unit merupakan Dump Truck (DT)
+pub fn is_dt_unit(unit_number: &str, unit_type: Option<&str>, unit_name: Option<&str>) -> bool {
+    let u_num = unit_number.trim().to_uppercase();
+    let u_type = unit_type.unwrap_or("").trim().to_uppercase();
+    let u_name = unit_name.unwrap_or("").trim().to_uppercase();
+
+    if u_type == "HEAVY_EQUIPMENT"
+        || u_type == "PC2000"
+        || u_type == "EX1200"
+        || u_type == "D85SS"
+        || u_type == "EXCAVATOR"
+        || u_type == "DOZER"
+        || u_num.starts_with("EX")
+        || u_num.starts_with("DZ")
+        || u_num.starts_with("PC")
+        || u_num.starts_with("EQ")
+    {
+        return false;
+    }
+
+    u_type == "DUMP_TRUCK"
+        || u_type == "DT"
+        || u_type == "HD785"
+        || u_type == "CAT777"
+        || u_type.contains("DUMP")
+        || u_type.contains("HAUL")
+        || u_num.starts_with("DT")
+        || u_num.starts_with("HD")
+        || u_name.contains("DUMP")
+        || u_name.contains("HAUL")
+        || u_name.contains("HD785")
+        || u_name.contains("CAT 777")
+        || u_name.contains("CAT777")
+        || u_name.contains("SCANIA")
+        || u_name.contains("VOLVO FMX")
+        || u_name.contains("HINO")
+        || u_name.contains("QUESTER")
+        || u_name.contains("ACTROS")
+}
+
+// Helper untuk mengecek apakah unit termasuk ke dalam kategori divisi ('HE' atau 'DT')
+pub fn is_unit_in_category(
+    unit_number: &str,
+    unit_type: Option<&str>,
+    unit_name: Option<&str>,
+    category: Option<&str>,
+) -> bool {
+    let Some(cat) = category
+        .map(|c| c.trim().to_uppercase())
+        .filter(|c| !c.is_empty() && c != "ALL")
+    else {
+        return true;
+    };
+
+    let is_dt = is_dt_unit(unit_number, unit_type, unit_name);
+    if cat == "DT" || cat == "DUMP_TRUCK" {
+        is_dt
+    } else if cat == "HE" || cat == "HEAVY_EQUIPMENT" {
+        !is_dt
+    } else {
+        true
+    }
+}
+
+// Helper untuk mengecek apakah mekanik/karyawan merupakan divisi Dump Truck (DT)
+pub fn is_dt_mechanic(dept_id: Option<&str>, position: Option<&str>, name: &str) -> bool {
+    let dept = dept_id.unwrap_or("").trim().to_uppercase();
+    let pos = position.unwrap_or("").trim().to_uppercase();
+    let nm = name.trim().to_uppercase();
+
+    dept == "DEPT-MECH-DT"
+        || dept.contains("-DT")
+        || dept.contains("DUMP_TRUCK")
+        || pos.contains("DUMP TRUCK")
+        || pos.contains("HAULING")
+        || pos.contains("HAUL TRUCK")
+        || pos.contains(" DT")
+        || pos.starts_with("DT ")
+        || pos.ends_with(" DT")
+        || nm.contains(" DT")
+        || nm.ends_with("-DT")
+}
+
+// Helper untuk mengecek apakah mekanik/karyawan termasuk ke dalam kategori divisi ('HE' atau 'DT')
+pub fn is_mechanic_in_category(
+    dept_id: Option<&str>,
+    position: Option<&str>,
+    name: &str,
+    category: Option<&str>,
+) -> bool {
+    let Some(cat) = category
+        .map(|c| c.trim().to_uppercase())
+        .filter(|c| !c.is_empty() && c != "ALL")
+    else {
+        return true;
+    };
+
+    let is_dt = is_dt_mechanic(dept_id, position, name);
+    if cat == "DT" || cat == "DUMP_TRUCK" {
+        is_dt
+    } else if cat == "HE" || cat == "HEAVY_EQUIPMENT" {
+        !is_dt
+    } else {
+        true
+    }
 }
 
 // ============================================================================

@@ -44,6 +44,22 @@ interface InventoryCacheDao {
         WHERE warehouse_id = :warehouseId AND part_number = :partNumber
     """)
     suspend fun updateStockCountLocal(warehouseId: String, partNumber: String, newQty: Double, timestamp: Long = System.currentTimeMillis())
+
+    @Query("""
+        UPDATE inventory_cache 
+        SET location_id = :binCode, updated_at = :timestamp, sync_status = 'PENDING_SYNC' 
+        WHERE warehouse_id = :warehouseId AND part_number = :partNumber
+    """)
+    suspend fun updateBinLocationLocal(warehouseId: String, partNumber: String, binCode: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("""
+        SELECT DISTINCT location_id FROM inventory_cache 
+        WHERE warehouse_id = :warehouseId AND location_id IS NOT NULL AND location_id != ''
+    """)
+    suspend fun getDistinctBins(warehouseId: String): List<String>
+
+    @Query("SELECT * FROM inventory_cache WHERE warehouse_id = :warehouseId")
+    suspend fun getAllStockByWarehouse(warehouseId: String): List<InventoryCacheEntity>
 }
 
 @Dao

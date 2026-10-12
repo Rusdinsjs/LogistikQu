@@ -39,13 +39,15 @@ export DATABASE_URL="postgres://logisticqu:logisticqu_secret@127.0.0.1:5440/logi
 export JWT_SECRET="logisticqu_super_secret_jwt_key_2026_valesite_mining"
 export SERVER_PORT="$BACKEND_PORT"
 export SERVER_HOST="0.0.0.0"
+unset SQLX_OFFLINE
 
 echo "🔨 Memeriksa & mengompilasi backend (cargo build)..."
-(cd "$PROJECT_ROOT/backend" && cargo build)
+(cd "$PROJECT_ROOT/backend" && cargo build --bin logisticqu-backend)
 
 BACKEND_BIN="$PROJECT_ROOT/backend/target/debug/logisticqu-backend"
 
-# Matikan proses backend lama jika ada
+# Matikan proses/container backend lama jika ada agar port tidak bentrok
+docker stop logisticqu-backend-dev >/dev/null 2>&1 || true
 pkill -f logisticqu-backend 2>/dev/null || true
 
 # Jalankan backend di background
@@ -104,6 +106,8 @@ echo "   - admin_main_he  : Admin Utama Alat Berat"
 echo "   - admin_main_dt  : Admin Utama Dump Truck"
 echo "   - admin_cont_he  : Admin Kontainer Alat Berat"
 echo "   - admin_cont_dt  : Admin Kontainer Dump Truck"
+echo "   - mekanik_he     : Mekanik Alat Berat (EMP-101)"
+echo "   - mekanik_dt     : Mekanik Dump Truck (EMP-103)"
 echo "=================================================================="
 echo "Tekan [Ctrl+C] untuk menghentikan aplikasi."
 echo ""

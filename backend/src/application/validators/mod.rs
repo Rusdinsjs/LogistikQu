@@ -37,6 +37,11 @@ impl IssueValidator {
             req.hm_km,
         )?;
 
+        TraceabilityRules::validate_mechanic_signature(
+            req.signature_type.as_deref(),
+            req.mechanic_signature_url.as_deref(),
+        )?;
+
         Ok(())
     }
 }

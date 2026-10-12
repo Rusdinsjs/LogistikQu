@@ -37,15 +37,23 @@ impl axum::extract::FromRef<AppState> for PgPool {
     }
 }
 
+fn extract_client_ip(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().chars().take(45).collect::<String>())
+        .filter(|s| !s.is_empty())
+}
+
 pub async fn login(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
-    let ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let ip = extract_client_ip(&headers);
     let ua = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
@@ -60,10 +68,7 @@ pub async fn refresh_token(
     headers: HeaderMap,
     Json(payload): Json<RefreshTokenRequest>,
 ) -> Result<Json<Value>, AppError> {
-    let ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let ip = extract_client_ip(&headers);
     let ua = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
@@ -83,10 +88,7 @@ pub async fn logout(
     headers: HeaderMap,
     payload: Option<Json<RefreshTokenRequest>>,
 ) -> Result<Json<Value>, AppError> {
-    let ip = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let ip = extract_client_ip(&headers);
     let ua = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())

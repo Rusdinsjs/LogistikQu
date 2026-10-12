@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy manifest and dependencies
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml Cargo.lock build.rs ./
 # Copy source, migrations and SQLx offline query metadata (.sqlx)
 COPY src ./src
 COPY migrations ./migrations

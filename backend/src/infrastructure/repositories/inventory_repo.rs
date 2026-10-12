@@ -46,7 +46,15 @@ impl InventoryRepository {
             INNER JOIN warehouses w ON s.warehouse_id = w.id
             INNER JOIN spare_parts p ON s.spare_part_id = p.id
             LEFT JOIN part_categories pc ON p.category_id = pc.id
-            WHERE s.warehouse_id = $1
+            WHERE (
+                  s.warehouse_id = $1
+                  OR s.warehouse_id IN (
+                      SELECT sub_warehouse_id FROM warehouse_supply_links WHERE main_warehouse_id = $1
+                  )
+                  OR s.warehouse_id IN (
+                      SELECT id FROM warehouses WHERE parent_warehouse_id = $1
+                  )
+              )
               AND s.deleted_at IS NULL
               AND w.deleted_at IS NULL
               AND p.deleted_at IS NULL

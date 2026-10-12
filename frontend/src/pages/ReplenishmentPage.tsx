@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { confirmDialog } from '../context/ToastContext';
 import { replenishmentApi, masterApi } from '../api';
 import type { ReplenishmentRequest, ReplenishmentDetail, RecommendationItem, SparePart } from '../types';
 import {
@@ -68,7 +69,11 @@ export const ReplenishmentPage: React.FC = () => {
     if (!currentWarehouse) return;
     try {
       setLoading(true);
-      const whId = currentWarehouse.warehouse_type === 'CONTAINER' ? currentWarehouse.id : 'WH-CONT-HE';
+      const whId =
+        currentWarehouse.warehouse_type === 'CONTAINER'
+          ? currentWarehouse.id
+          : currentWarehouse.supplied_sub_warehouse_ids?.[0] ||
+            (currentWarehouse.id.includes('DT') ? 'WH-CONT-DT' : 'WH-CONT-HE');
       const data = await replenishmentApi.getRecommendations(whId);
       setRecommendations(data);
     } catch (err) {
@@ -182,7 +187,16 @@ export const ReplenishmentPage: React.FC = () => {
 
   const handleReceive = async () => {
     if (!selectedRequestId) return;
-    if (!confirm('Konfirmasi penerimaan barang drop dari Gudang Utama ke stok kontainer ini?')) return;
+    if (
+      !(await confirmDialog({
+        title: 'Konfirmasi Penerimaan STO Drop',
+        message: 'Konfirmasi penerimaan barang drop dari Gudang Utama ke stok kontainer ini?',
+        confirmText: 'Ya, Terima Barang',
+        variant: 'success',
+      }))
+    ) {
+      return;
+    }
     try {
       const res = await replenishmentApi.receiveDrop(selectedRequestId);
       alert(res.message || 'Barang berhasil diterima!');

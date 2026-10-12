@@ -59,6 +59,11 @@ fun StockCheckScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = White)
                     }
                 },
+                actions = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.Home, contentDescription = "Beranda", tint = IndustrialEmerald)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Slate900)
             )
         }

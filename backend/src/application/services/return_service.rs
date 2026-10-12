@@ -31,9 +31,11 @@ impl ReturnService {
         wh_filter: &str,
         status_filter: &str,
         search: &str,
+        mechanic_filter: &str,
+        user_whs: &[String],
     ) -> Result<Vec<UsedPartReturn>, AppError> {
         self.return_repo
-            .list_returns(wh_filter, status_filter, search)
+            .list_returns(wh_filter, status_filter, search, mechanic_filter, user_whs)
             .await
     }
 

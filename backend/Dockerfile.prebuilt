@@ -1,0 +1,30 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 10001 logisticqu && \
+    useradd -u 10001 -g logisticqu -s /bin/false -M logisticqu
+
+WORKDIR /app
+
+COPY bin/logisticqu-backend /app/logisticqu-backend
+COPY migrations /app/migrations
+
+RUN chown -R logisticqu:logisticqu /app
+
+USER logisticqu
+
+ENV PORT=8080
+ENV RUST_LOG=info
+ENV TZ=Asia/Makassar
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://127.0.0.1:8080/health || exit 1
+
+CMD ["/app/logisticqu-backend"]

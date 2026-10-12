@@ -35,7 +35,7 @@ impl TraceabilityRules {
 
         if site_id.trim().is_empty() {
             return Err(AppError::ValidationError(
-                "Traceability BR-004: Site Tambang / Pit Lokasi wajib dipilih".to_string(),
+                "Traceability BR-004: Site / Pit Lokasi wajib dipilih".to_string(),
             ));
         }
 
@@ -47,6 +47,25 @@ impl TraceabilityRules {
             }
         }
 
+        Ok(())
+    }
+
+    /// BR-005: Validasi Tanda Tangan Mekanik (Digital di layar atau Fisik di struk)
+    pub fn validate_mechanic_signature(
+        signature_type: Option<&str>,
+        mechanic_signature_url: Option<&str>,
+    ) -> Result<(), AppError> {
+        if let Some(sig_type) = signature_type {
+            if sig_type.eq_ignore_ascii_case("DIGITAL") {
+                if let Some(sig_url) = mechanic_signature_url {
+                    if sig_url.trim().is_empty() {
+                        return Err(AppError::ValidationError(
+                            "Traceability BR-005: Tanda tangan digital mekanik di layar HP / touchscreen tidak boleh kosong".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -288,5 +307,24 @@ mod tests {
             Decimal::new(50, 0),
         );
         assert_eq!(rec_no_order, Decimal::ZERO);
+    }
+
+    #[test]
+    fn test_mechanic_signature_validation() {
+        // Digital mode with valid signature data
+        let res_dig = TraceabilityRules::validate_mechanic_signature(
+            Some("DIGITAL"),
+            Some("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."),
+        );
+        assert!(res_dig.is_ok());
+
+        // Digital mode with empty signature string should fail
+        let res_dig_fail =
+            TraceabilityRules::validate_mechanic_signature(Some("DIGITAL"), Some("   "));
+        assert!(res_dig_fail.is_err());
+
+        // Physical mode (wet signature on printed receipt) is valid
+        let res_phys = TraceabilityRules::validate_mechanic_signature(Some("PHYSICAL"), None);
+        assert!(res_phys.is_ok());
     }
 }

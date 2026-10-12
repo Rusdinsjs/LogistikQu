@@ -761,3 +761,94 @@ html.light ::-webkit-scrollbar-thumb:hover,
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ==========================================================================
+   PRINT STYLES FOR OFFICIAL POS STORE ISSUE VOUCHER
+   ========================================================================== */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .no-print,
+  nav,
+  aside,
+  header,
+  footer,
+  .sidebar,
+  .navbar,
+  .print-hide {
+    display: none !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #pos-receipt-print-area,
+  #pos-receipt-print-area * {
+    visibility: visible;
+  }
+
+  #pos-receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 8mm;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    z-index: 999999;
+  }
+}
+
+/* ==========================================================================
+   TOAST NOTIFICATION & CUSTOM DIALOG ANIMATIONS
+   ========================================================================== */
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(28px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toastProgress {
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0%;
+  }
+}
+
+@keyframes modalFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-toast-slide-in {
+  animation: toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-toast-progress {
+  animation-name: toastProgress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.animate-fade-in {
+  animation: modalFadeIn 0.18s ease-out forwards;
+}
